@@ -1,15 +1,24 @@
 """
-📈 محلل الأسهم المصري المتكامل مع قاعدة بيانات
-Egyptian Stock Analyst - Complete System
+📈 محلل الأسهم المصري المتكامل - نسخة مستقلة
+Egyptian Stock Analyst - Standalone Version
 """
 
 import streamlit as st
 from datetime import datetime
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
-from sqlalchemy.orm import Session
+from plotly.subplots import make_subplots
+import yfinance as yf
+from typing import Dict, List, Optional
+import sqlite3
+from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore')
 
+# ============================================
 # إعداد الصفحة
+# ============================================
 st.set_page_config(
     page_title="محلل الأسهم المصري - نظام متكامل 📈",
     page_icon="🇪🇬",
@@ -17,93 +26,564 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# استيراد الملفات المحلية
-from database.connection import init_db, get_db, backup_database
-from database.crud import *
-#from utils.indicators import calculate_indicators
-#from utils.telegram_bot import TelegramNotifier
-#from utils.notifications import NotificationManager
+# ============================================
+# دوال المؤشرات الفنية (دون الحاجة لـ pandas_ta)
+# ============================================
 
-# ============= التهيئة =============
+def calculate_sma(data: pd.Series, period: int) -> pd.Series:
+    """حساب المتوسط المتحرك البسيط"""
+    return data.rolling(window=period).mean()
+
+def calculate_ema(data: pd.Series, period: int) -> pd.Series:
+    """حساب المتوسط المتحرك الأسي"""
+    return data.ewm(span=period, adjust=False).mean()
+
+def calculate_rsi(data: pd.Series, period: int = 14) -> pd.Series:
+    """حساب مؤشر القوة النسبية RSI"""
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calculate_macd(data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
+    """حساب مؤشر MACD"""
+    ema_fast = calculate_ema(data, fast)
+    ema_slow = calculate_ema(data, slow)
+    macd_line = ema_fast - ema_slow
+    signal_line = calculate_ema(macd_line, signal)
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
+
+def calculate_bollinger_bands(data: pd.Series, period: int = 20, std_dev: int = 2):
+    """حساب نطاقات بولينجر"""
+    sma = calculate_sma(data, period)
+    std = data.rolling(window=period).std()
+    upper_band = sma + (std * std_dev)
+    lower_band = sma - (std * std_dev)
+    return upper_band, sma, lower_band
+
+# ============================================
+# تهيئة قاعدة البيانات
+# ============================================
+
+def init_database():
+    """تهيئة قاعدة البيانات SQLite"""
+    db_path = Path("data/stock_analyst.db")
+    db_path.parent.mkdir(exist_ok=True)
+    
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    
+    # إنشاء الجداول
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT,
+            settings TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS favorite_stocks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            ticker TEXT NOT NULL,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS portfolio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            ticker TEXT NOT NULL,
+            shares REAL NOT NULL,
+            avg_price REAL NOT NULL,
+            bought_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            ticker TEXT NOT NULL,
+            type TEXT NOT NULL,
+            shares REAL NOT NULL,
+            price REAL NOT NULL,
+            total_value REAL NOT NULL,
+            transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            ticker TEXT NOT NULL,
+            alert_type TEXT NOT NULL,
+            condition TEXT NOT NULL,
+            target_value REAL NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            triggered INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stock_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            recommendation TEXT,
+            confidence REAL,
+            rsi_value REAL,
+            sma_value REAL,
+            analysis_text TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    
+    # إضافة مستخدم افتراضي
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO users (id, username, email, settings) VALUES (1, 'admin', 'admin@example.com', '{}')")
+    conn.commit()
+    conn.close()
+    
+    return str(db_path)
+
+# ============================================
+# دوال قاعدة البيانات
+# ============================================
+
+def get_db_connection():
+    """الحصول على اتصال قاعدة البيانات"""
+    db_path = Path("data/stock_analyst.db")
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def add_favorite_stock(user_id: int, ticker: str):
+    """إضافة سهم للمفضلة"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO favorite_stocks (user_id, ticker) VALUES (?, ?)",
+        (user_id, ticker)
+    )
+    conn.commit()
+    conn.close()
+
+def remove_favorite_stock(user_id: int, ticker: str):
+    """حذف سهم من المفضلة"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM favorite_stocks WHERE user_id = ? AND ticker = ?",
+        (user_id, ticker)
+    )
+    conn.commit()
+    conn.close()
+
+def get_favorite_stocks(user_id: int) -> List[str]:
+    """الحصول على قائمة الأسهم المفضلة"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT ticker FROM favorite_stocks WHERE user_id = ?",
+        (user_id,)
+    )
+    stocks = [row['ticker'] for row in cursor.fetchall()]
+    conn.close()
+    return stocks
+
+def add_transaction(user_id: int, ticker: str, trans_type: str, shares: float, price: float):
+    """إضافة معاملة جديدة"""
+    total_value = shares * price
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO transactions (user_id, ticker, type, shares, price, total_value)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, ticker, trans_type, shares, price, total_value))
+    
+    # تحديث المحفظة
+    if trans_type == "BUY":
+        # التحقق من وجود السهم في المحفظة
+        cursor.execute('SELECT shares, avg_price FROM portfolio WHERE user_id = ? AND ticker = ?', 
+                      (user_id, ticker))
+        existing = cursor.fetchone()
+        
+        if existing:
+            new_shares = existing['shares'] + shares
+            new_avg = (existing['shares'] * existing['avg_price'] + shares * price) / new_shares
+            cursor.execute('''
+                UPDATE portfolio SET shares = ?, avg_price = ? 
+                WHERE user_id = ? AND ticker = ?
+            ''', (new_shares, new_avg, user_id, ticker))
+        else:
+            cursor.execute('''
+                INSERT INTO portfolio (user_id, ticker, shares, avg_price)
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, ticker, shares, price))
+    else:
+        cursor.execute('''
+            UPDATE portfolio 
+            SET shares = shares - ?
+            WHERE user_id = ? AND ticker = ? AND shares >= ?
+        ''', (shares, user_id, ticker, shares))
+        
+        # حذف إذا أصبحت الصفر
+        cursor.execute('DELETE FROM portfolio WHERE user_id = ? AND ticker = ? AND shares <= 0', 
+                      (user_id, ticker))
+    
+    conn.commit()
+    conn.close()
+
+def get_portfolio(user_id: int) -> List[Dict]:
+    """الحصول على محفظة المستخدم"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT ticker, shares, avg_price FROM portfolio WHERE user_id = ?",
+        (user_id,)
+    )
+    portfolio = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return portfolio
+
+def add_alert(user_id: int, ticker: str, alert_type: str, condition: str, target_value: float):
+    """إضافة تنبيه جديد"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO alerts (user_id, ticker, alert_type, condition, target_value)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, ticker, alert_type, condition, target_value))
+    conn.commit()
+    conn.close()
+
+def get_active_alerts(user_id: int) -> List[Dict]:
+    """الحصول على التنبيهات النشطة"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM alerts 
+        WHERE user_id = ? AND is_active = 1 AND triggered = 0
+    ''', (user_id,))
+    alerts = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return alerts
+
+# ============================================
+# قائمة الأسهم المصرية
+# ============================================
+
+EGYPTIAN_STOCKS = {
+    "COMI.CA": "البنك التجاري الدولي (CIB)",
+    "TMGH.CA": "طلعت مصطفى القابضة",
+    "SWDY.CA": "السويدي إليكتريك",
+    "ETEL.CA": "تليكوم مصر",
+    "EGAL.CA": "مصر للألومنيوم",
+    "EAST.CA": "الشرقية للدخان",
+    "MFPC.CA": "مصر لإنتاج الأسمدة (موبكو)",
+    "ORAS.CA": "أوراسكوم للإنشاءات",
+    "JUFO.CA": "جي بي أوتو",
+    "ABUK.CA": "أبو قير للأسمدة",
+    "HRHO.CA": "البنك الهولندي",
+    "SUGR.CA": "سكر الحدود",
+    "SKPC.CA": "سيدبك",
+    "PHDC.CA": "بالم هيلز للتعمير",
+}
+
+# ============================================
+# دوال التحليل الفني
+# ============================================
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_stock_data(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:
+    """جلب بيانات السهم من Yahoo Finance"""
+    try:
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period)
+        
+        if df.empty:
+            return None
+        
+        # تنظيف البيانات
+        df = df.dropna()
+        
+        # إضافة المؤشرات الفنية (بدون pandas_ta)
+        if len(df) >= 20:
+            df['SMA_20'] = calculate_sma(df['Close'], 20)
+            df['SMA_50'] = calculate_sma(df['Close'], 50) if len(df) >= 50 else df['SMA_20']
+            df['EMA_9'] = calculate_ema(df['Close'], 9)
+            df['RSI'] = calculate_rsi(df['Close'], 14)
+            df['Volume_SMA'] = calculate_sma(df['Volume'], 20)
+            
+            # MACD
+            df['MACD'], df['MACD_Signal'], df['MACD_Histogram'] = calculate_macd(df['Close'])
+            
+            # Bollinger Bands
+            df['BB_Upper'], df['BB_Middle'], df['BB_Lower'] = calculate_bollinger_bands(df['Close'])
+        
+        return df
+    except Exception as e:
+        st.error(f"خطأ في جلب بيانات {ticker}: {str(e)}")
+        return None
+
+def analyze_stock(df: pd.DataFrame, ticker: str) -> Dict:
+    """تحليل السهم وإعطاء توصيات"""
+    if df is None or df.empty:
+        return {'signal': 'error', 'message': 'لا توجد بيانات كافية'}
+    
+    last_price = df['Close'].iloc[-1]
+    last_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
+    sma_20 = df['SMA_20'].iloc[-1] if 'SMA_20' in df.columns else last_price
+    
+    # تحليل RSI
+    if last_rsi > 70:
+        rsi_signal = "ذروة شراء - خطر"
+        rsi_color = "red"
+    elif last_rsi < 30:
+        rsi_signal = "ذروة بيع - فرصة"
+        rsi_color = "green"
+    else:
+        rsi_signal = "منطقة محايدة"
+        rsi_color = "yellow"
+    
+    # تحليل المتوسطات
+    if last_price > sma_20:
+        ma_signal = "اتجاه صاعد"
+        ma_color = "green"
+    else:
+        ma_signal = "اتجاه هابط"
+        ma_color = "red"
+    
+    # التوصية النهائية
+    if last_rsi < 30 and last_price > sma_20:
+        recommendation = "🟢 شراء"
+        confidence = "مرتفعة"
+    elif last_rsi > 70 and last_price < sma_20:
+        recommendation = "🔴 بيع"
+        confidence = "مرتفعة"
+    elif last_rsi < 40:
+        recommendation = "🟡 تراكم"
+        confidence = "متوسطة"
+    elif last_rsi > 60:
+        recommendation = "🟠 تصريف"
+        confidence = "متوسطة"
+    else:
+        recommendation = "⚪ انتظار"
+        confidence = "منخفضة"
+    
+    # حساب التغير
+    price_change = ((last_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100 if len(df) > 1 else 0
+    
+    return {
+        'signal': recommendation,
+        'confidence': confidence,
+        'rsi': last_rsi,
+        'rsi_signal': rsi_signal,
+        'rsi_color': rsi_color,
+        'ma_signal': ma_signal,
+        'ma_color': ma_color,
+        'current_price': last_price,
+        'sma_20': sma_20,
+        'price_change': price_change
+    }
+
+def create_advanced_chart(df: pd.DataFrame, ticker: str):
+    """إنشاء رسم بياني متقدم"""
+    fig = make_subplots(
+        rows=4, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.4, 0.2, 0.2, 0.2],
+        subplot_titles=(f"📈 سعر {ticker}", "📊 RSI", "📉 MACD", "📊 حجم التداول")
+    )
+    
+    # السعر والمتوسطات
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['Close'],
+        name="سعر الإغلاق",
+        line=dict(color='#00ff87', width=2)
+    ), row=1, col=1)
+    
+    if 'SMA_20' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['SMA_20'],
+            name="SMA 20",
+            line=dict(color='orange', width=1.5, dash='dash')
+        ), row=1, col=1)
+    
+    if 'SMA_50' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['SMA_50'],
+            name="SMA 50",
+            line=dict(color='purple', width=1.5, dash='dot')
+        ), row=1, col=1)
+    
+    # Bollinger Bands
+    if 'BB_Upper' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['BB_Upper'],
+            name="BB Upper",
+            line=dict(color='gray', width=1, dash='dash'),
+            opacity=0.5
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['BB_Lower'],
+            name="BB Lower",
+            line=dict(color='gray', width=1, dash='dash'),
+            opacity=0.5,
+            fill='tonexty'
+        ), row=1, col=1)
+    
+    # RSI
+    if 'RSI' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['RSI'],
+            name="RSI",
+            line=dict(color='#ff006e', width=2)
+        ), row=2, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+        fig.add_hrect(y0=70, y1=100, fillcolor="red", opacity=0.1, row=2, col=1)
+        fig.add_hrect(y0=0, y1=30, fillcolor="green", opacity=0.1, row=2, col=1)
+        fig.update_yaxes(range=[0, 100], row=2, col=1)
+    
+    # MACD
+    if 'MACD' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['MACD'],
+            name="MACD",
+            line=dict(color='#00b4ff', width=1.5)
+        ), row=3, col=1)
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['MACD_Signal'],
+            name="Signal",
+            line=dict(color='#ffb703', width=1.5)
+        ), row=3, col=1)
+        
+        # أعمدة الهيستوغرام
+        colors = ['red' if val < 0 else 'green' for val in df['MACD_Histogram']]
+        fig.add_trace(go.Bar(
+            x=df.index, y=df['MACD_Histogram'],
+            name="Histogram",
+            marker_color=colors,
+            opacity=0.5
+        ), row=3, col=1)
+    
+    # حجم التداول
+    colors = ['#00ff87' if close >= open else '#ff006e' 
+              for close, open in zip(df['Close'], df['Open'])]
+    fig.add_trace(go.Bar(
+        x=df.index, y=df['Volume'],
+        name="حجم التداول",
+        marker_color=colors,
+        opacity=0.7
+    ), row=4, col=1)
+    
+    if 'Volume_SMA' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['Volume_SMA'],
+            name="متوسط الحجم",
+            line=dict(color='yellow', width=1.5, dash='dot')
+        ), row=4, col=1)
+    
+    fig.update_layout(
+        height=900,
+        template="plotly_dark",
+        showlegend=True,
+        title_text=f"تحليل سهم {ticker}",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    fig.update_xaxes(title_text="التاريخ", row=4, col=1)
+    fig.update_yaxes(title_text="السعر", row=1, col=1)
+    fig.update_yaxes(title_text="RSI", row=2, col=1)
+    fig.update_yaxes(title_text="MACD", row=3, col=1)
+    fig.update_yaxes(title_text="الكمية", row=4, col=1)
+    
+    return fig
+
+# ============================================
+# تهيئة الجلسة
+# ============================================
+
 def init_session():
     """تهيئة جلسة المستخدم"""
     if 'user_id' not in st.session_state:
-        st.session_state.user_id = 1  # مستخدم افتراضي
+        st.session_state.user_id = 1
     if 'db_initialized' not in st.session_state:
-        init_db()
+        init_database()
         st.session_state.db_initialized = True
-    if 'notifications' not in st.session_state:
-        st.session_state.notifications = []
+    if 'dark_mode' not in st.session_state:
+        st.session_state.dark_mode = True
 
-# ============= الواجهة الجانبية =============
+# ============================================
+# الواجهة الجانبية
+# ============================================
+
 def render_sidebar():
     """عرض الشريط الجانبي"""
     with st.sidebar:
-        st.image("https://upload.wikimedia.org/wikipedia/en/thumb/2/2a/Egyptian_Exchange_logo.png/200px-Egyptian_Exchange_logo.png", 
+        st.image("https://upload.wikimedia.org/wikipedia/en/thumb/2/2a/Egyptian_Exchange_logo.png/200px-Egyptian_Exchange_logo.png",
                  use_container_width=True)
         
         st.markdown("# 🏦 بورصة مصر")
         st.markdown("---")
         
-        # معلومات المستخدم
-        db = next(get_db())
-        user = get_user(db, st.session_state.user_id)
-        if user:
-            st.markdown(f"### 👤 مرحباً {user.username}")
+        # وضع العرض
+        st.session_state.dark_mode = st.toggle("🌙 الوضع المظلم", value=st.session_state.dark_mode)
         
         st.markdown("---")
         
         # إحصائيات سريعة
         st.markdown("### 📊 إحصائيات")
         
-        # عدد الأسهم المفضلة
-        favorites = get_favorite_stocks(db, st.session_state.user_id)
+        favorites = get_favorite_stocks(st.session_state.user_id)
         st.metric("⭐ الأسهم المفضلة", len(favorites))
         
-        # قيمة المحفظة
-        portfolio_summary = get_portfolio_summary(db, st.session_state.user_id)
-        st.metric("💰 قيمة المحفظة", f"{portfolio_summary['total_value']:,.2f} ج.م")
+        portfolio = get_portfolio(st.session_state.user_id)
+        portfolio_value = sum(h['shares'] * h['avg_price'] for h in portfolio)
+        st.metric("💰 قيمة المحفظة", f"{portfolio_value:,.2f} ج.م")
         
-        # عدد التنبيهات
-        alerts = get_active_alerts(db, st.session_state.user_id)
-        st.metric("🔔 التنبيهات النشطة", len(alerts))
+        alerts = get_active_alerts(st.session_state.user_id)
+        st.metric("🔔 التنبيهات", len(alerts))
         
         st.markdown("---")
         
-        # أزرار سريعة
         if st.button("🔄 تحديث البيانات", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-        
-        if st.button("💾 نسخ احتياطي", use_container_width=True):
-            backup_path = backup_database()
-            if backup_path:
-                st.success(f"تم إنشاء نسخة احتياطية")
         
         st.markdown("---")
         st.caption("📊 نظام متكامل لتحليل الأسهم")
         st.caption("⚠️ للأغراض التعليمية فقط")
 
-# ============= الصفحة الرئيسية =============
+# ============================================
+# التطبيق الرئيسي
+# ============================================
+
 def main():
     """تشغيل التطبيق الرئيسي"""
     
     # تهيئة الجلسة
     init_session()
-    
-    # قائمة الأسهم المصرية
-    EGYPTIAN_STOCKS = {
-        "COMI.CA": "البنك التجاري الدولي (CIB)",
-        "TMGH.CA": "طلعت مصطفى القابضة",
-        "SWDY.CA": "السويدي إليكتريك",
-        "ETEL.CA": "تليكوم مصر",
-        "EGAL.CA": "مصر للألومنيوم",
-        "EAST.CA": "الشرقية للدخان",
-        "MFPC.CA": "مصر لإنتاج الأسمدة (موبكو)",
-        "ORAS.CA": "أوراسكوم للإنشاءات",
-        "JUFO.CA": "جي بي أوتو",
-        "ABUK.CA": "أبو قير للأسمدة",
-    }
     
     # عرض الشريط الجانبي
     render_sidebar()
@@ -114,12 +594,11 @@ def main():
     st.markdown("---")
     
     # تبويبات التطبيق
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🔍 تحليل الأسهم",
         "⭐ الأسهم المفضلة",
         "💰 المحفظة",
-        "🔔 التنبيهات",
-        "📊 التقارير"
+        "🔔 التنبيهات"
     ])
     
     # ============= التبويب 1: تحليل الأسهم =============
@@ -141,73 +620,85 @@ def main():
                 index=2
             )
         
-        # زر إضافة للمفضلة
+        # أزرار الإجراءات
         col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("⭐ إضافة للمفضلة", use_container_width=True):
-                db = next(get_db())
-                add_favorite_stock(db, st.session_state.user_id, selected_ticker)
+                add_favorite_stock(st.session_state.user_id, selected_ticker)
                 st.success(f"تم إضافة {selected_ticker} إلى المفضلة")
                 st.rerun()
         
-        # عرض التحليل
+        # جلب البيانات وتحليلها
         with st.spinner("جاري تحليل السهم..."):
-            # استيراد دوال التحليل
-            from utils.indicators import fetch_stock_data, analyze_stock, create_advanced_chart
-            
-            # جلب البيانات
             df = fetch_stock_data(selected_ticker, period)
             
             if df is not None and not df.empty:
-                # تحليل السهم
                 analysis = analyze_stock(df, selected_ticker)
                 
                 # عرض المؤشرات
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("💰 السعر", f"{analysis['current_price']:.2f} ج.م")
-                with col2:
-                    st.metric("📊 RSI", f"{analysis['rsi']:.1f}")
-                with col3:
+                metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+                with metric_col1:
+                    st.metric("💰 السعر الحالي", f"{analysis['current_price']:.2f} ج.م",
+                             delta=f"{analysis['price_change']:.2f}%")
+                with metric_col2:
+                    st.metric("📊 RSI", f"{analysis['rsi']:.1f}", 
+                             delta=analysis['rsi_signal'])
+                with metric_col3:
                     st.metric("📈 المتوسط 20", f"{analysis['sma_20']:.2f}")
-                with col4:
+                with metric_col4:
                     st.metric("🎯 التوصية", analysis['signal'])
                 
                 # الرسم البياني
                 chart = create_advanced_chart(df, selected_ticker)
                 st.plotly_chart(chart, use_container_width=True)
                 
-                # تخزين التحليل في قاعدة البيانات
-                db = next(get_db())
-                save_analysis(db, {
-                    'ticker': selected_ticker,
-                    'recommendation': analysis['signal'],
-                    'confidence': 0.8 if analysis['signal'] != 'انتظار' else 0.3,
-                    'analysis_text': f"RSI: {analysis['rsi']:.1f}, MA Signal: {analysis['ma_signal']}"
-                })
+                # نقاط الدعم والمقاومة
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("📈 نقاط المقاومة")
+                    recent_highs = df['High'].tail(50).nlargest(3)
+                    for i, price in enumerate(recent_highs, 1):
+                        st.write(f"**R{i}:** {price:.2f} ج.م")
+                
+                with col2:
+                    st.subheader("📉 نقاط الدعم")
+                    recent_lows = df['Low'].tail(50).nsmallest(3)
+                    for i, price in enumerate(recent_lows, 1):
+                        st.write(f"**S{i}:** {price:.2f} ج.م")
+                
+                # تنبيه RSI
+                if analysis['rsi'] > 70:
+                    st.warning(f"⚠️ تنبيه: السهم في منطقة ذروة شراء (RSI: {analysis['rsi']:.1f})")
+                elif analysis['rsi'] < 30:
+                    st.success(f"✅ تنبيه: السهم في منطقة ذروة بيع (RSI: {analysis['rsi']:.1f})")
+                
+                # عرض البيانات
+                with st.expander("📊 عرض البيانات التفصيلية"):
+                    display_df = df.tail(20)[['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'SMA_20']].copy()
+                    display_df.index = display_df.index.strftime('%Y-%m-%d')
+                    st.dataframe(display_df, use_container_width=True)
                 
             else:
-                st.error("❌ لا يمكن جلب البيانات")
+                st.error("❌ لا يمكن جلب البيانات. يرجى المحاولة مرة أخرى")
     
     # ============= التبويب 2: الأسهم المفضلة =============
     with tab2:
         st.header("⭐ الأسهم المفضلة")
         
-        db = next(get_db())
-        favorites = get_favorite_stocks(db, st.session_state.user_id)
+        favorites = get_favorite_stocks(st.session_state.user_id)
         
         if favorites:
-            for fav in favorites:
+            for ticker in favorites:
                 with st.container():
                     col1, col2, col3 = st.columns([2, 1, 1])
                     with col1:
-                        st.write(f"**{fav.ticker}**")
+                        st.write(f"**{ticker}** - {EGYPTIAN_STOCKS.get(ticker, '')}")
                     with col2:
-                        if st.button("📊 تحليل", key=f"analyze_{fav.id}"):
-                            st.session_state.selected_ticker = fav.ticker
+                        if st.button("📊 تحليل", key=f"analyze_{ticker}"):
+                            st.session_state.selected_ticker = ticker
                     with col3:
-                        if st.button("🗑️ حذف", key=f"delete_{fav.id}"):
-                            remove_favorite_stock(db, st.session_state.user_id, fav.ticker)
+                        if st.button("🗑️ حذف", key=f"delete_{ticker}"):
+                            remove_favorite_stock(st.session_state.user_id, ticker)
                             st.rerun()
                     st.markdown("---")
         else:
@@ -217,63 +708,55 @@ def main():
     with tab3:
         st.header("💰 إدارة المحفظة")
         
-        db = next(get_db())
-        
         # نموذج إضافة صفقة
         with st.expander("➕ إضافة صفقة جديدة", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
                 ticker = st.selectbox("السهم", list(EGYPTIAN_STOCKS.keys()), key="portfolio_ticker")
             with col2:
-                shares = st.number_input("عدد الأسهم", min_value=1.0, step=1.0)
+                shares = st.number_input("عدد الأسهم", min_value=1.0, step=1.0, key="shares")
             with col3:
-                price = st.number_input("سعر الشراء", min_value=0.01, step=0.01)
+                price = st.number_input("سعر الشراء", min_value=0.01, step=0.01, key="price")
             
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ شراء", use_container_width=True):
-                    portfolio = get_or_create_portfolio(db, st.session_state.user_id)
-                    add_holding(db, portfolio.id, ticker, shares, price)
-                    
-                    # تسجيل المعاملة
-                    transaction = Transaction(
-                        user_id=st.session_state.user_id,
-                        ticker=ticker,
-                        type="BUY",
-                        shares=shares,
-                        price=price,
-                        total_value=shares * price,
-                        transaction_date=datetime.now()
-                    )
-                    db.add(transaction)
-                    db.commit()
-                    
+                    add_transaction(st.session_state.user_id, ticker, "BUY", shares, price)
                     st.success(f"تم شراء {shares} سهم من {ticker}")
                     st.rerun()
         
         # عرض المحفظة
-        portfolio_summary = get_portfolio_summary(db, st.session_state.user_id)
+        portfolio = get_portfolio(st.session_state.user_id)
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("💰 الرصيد النقدي", f"{portfolio_summary['total_cash']:,.2f} ج.م")
-        with col2:
-            st.metric("📊 قيمة الأسهم", f"{portfolio_summary['total_value'] - portfolio_summary['total_cash']:,.2f} ج.م")
-        with col3:
-            st.metric("💎 إجمالي المحفظة", f"{portfolio_summary['total_value']:,.2f} ج.م")
-        
-        if portfolio_summary['holdings']:
+        if portfolio:
             st.subheader("📋 الحيازات الحالية")
-            holdings_data = []
-            for holding in portfolio_summary['holdings']:
-                holdings_data.append({
+            
+            portfolio_data = []
+            total_value = 0
+            
+            for holding in portfolio:
+                # جلب السعر الحالي
+                df = fetch_stock_data(holding['ticker'], "1d")
+                current_price = df['Close'].iloc[-1] if df is not None else holding['avg_price']
+                current_value = holding['shares'] * current_price
+                total_value += current_value
+                profit_loss = current_value - (holding['shares'] * holding['avg_price'])
+                profit_loss_pct = (profit_loss / (holding['shares'] * holding['avg_price'])) * 100 if holding['shares'] * holding['avg_price'] > 0 else 0
+                
+                portfolio_data.append({
                     "السهم": holding['ticker'],
                     "عدد الأسهم": holding['shares'],
                     "متوسط السعر": holding['avg_price'],
-                    "إجمالي التكلفة": holding['total_cost']
+                    "السعر الحالي": current_price,
+                    "القيمة الحالية": current_value,
+                    "الربح/الخسارة": profit_loss,
+                    "نسبة الربح": f"{profit_loss_pct:.1f}%"
                 })
             
-            st.dataframe(pd.DataFrame(holdings_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(portfolio_data), use_container_width=True, hide_index=True)
+            st.metric("💰 إجمالي قيمة المحفظة", f"{total_value:,.2f} ج.م")
+        else:
+            st.info("لا توجد أسهم في المحفظة")
     
     # ============= التبويب 4: التنبيهات =============
     with tab4:
@@ -285,101 +768,45 @@ def main():
             with col1:
                 alert_ticker = st.selectbox("السهم", list(EGYPTIAN_STOCKS.keys()), key="alert_ticker")
             with col2:
-                alert_type = st.selectbox("نوع التنبيه", ["price", "rsi", "volume"])
+                alert_type = st.selectbox("نوع التنبيه", ["price", "rsi"])
             with col3:
                 condition = st.selectbox("الشرط", ["above", "below"])
             
-            target_value = st.number_input("القيمة المستهدفة", min_value=0.01, step=0.01)
+            target_value = st.number_input("القيمة المستهدفة", min_value=0.01, step=0.01, key="target")
             
             if st.button("✅ إنشاء تنبيه", use_container_width=True):
-                db = next(get_db())
-                create_alert(db, st.session_state.user_id, alert_ticker, alert_type, condition, target_value)
+                add_alert(st.session_state.user_id, alert_ticker, alert_type, condition, target_value)
                 st.success("تم إنشاء التنبيه بنجاح")
                 st.rerun()
         
         # عرض التنبيهات الحالية
-        db = next(get_db())
-        alerts = get_active_alerts(db, st.session_state.user_id)
+        alerts = get_active_alerts(st.session_state.user_id)
         
         if alerts:
             st.subheader("📋 التنبيهات النشطة")
             for alert in alerts:
                 col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
                 with col1:
-                    st.write(f"**{alert.ticker}**")
+                    st.write(f"**{alert['ticker']}**")
                 with col2:
-                    st.write(f"{alert.alert_type}")
+                    st.write(alert['alert_type'])
                 with col3:
-                    st.write(f"{alert.condition} {alert.target_value}")
+                    st.write(f"{alert['condition']} {alert['target_value']}")
                 with col4:
-                    if st.button("🗑️", key=f"del_alert_{alert.id}"):
-                        alert.is_active = False
-                        db.commit()
+                    if st.button("🗑️", key=f"del_alert_{alert['id']}"):
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE alerts SET is_active = 0 WHERE id = ?", (alert['id'],))
+                        conn.commit()
+                        conn.close()
                         st.rerun()
                 st.markdown("---")
         else:
             st.info("لا توجد تنبيهات نشطة")
-    
-    # ============= التبويب 5: التقارير =============
-    with tab5:
-        st.header("📊 التقارير والإحصائيات")
-        
-        db = next(get_db())
-        
-        # إحصائيات عامة
-        st.subheader("📈 إحصائيات عامة")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # عدد المعاملات
-            transactions = db.query(Transaction).filter(Transaction.user_id == st.session_state.user_id).all()
-            st.metric("📊 عدد المعاملات", len(transactions))
-        
-        with col2:
-            # قيمة المحفظة
-            portfolio_summary = get_portfolio_summary(db, st.session_state.user_id)
-            st.metric("💰 إجمالي المحفظة", f"{portfolio_summary['total_value']:,.2f}")
-        
-        with col3:
-            # عدد التنبيهات المفعلة
-            alerts = get_active_alerts(db, st.session_state.user_id)
-            st.metric("🔔 التنبيهات المفعلة", len(alerts))
-        
-        # آخر المعاملات
-        if transactions:
-            st.subheader("📋 آخر المعاملات")
-            transactions_data = []
-            for trans in transactions[-10:]:
-                transactions_data.append({
-                    "التاريخ": trans.transaction_date.strftime("%Y-%m-%d %H:%M"),
-                    "السهم": trans.ticker,
-                    "النوع": trans.type,
-                    "الكمية": trans.shares,
-                    "السعر": trans.price,
-                    "الإجمالي": trans.total_value
-                })
-            
-            st.dataframe(pd.DataFrame(transactions_data), use_container_width=True, hide_index=True)
-        
-        # زر تصدير التقرير
-        if st.button("📥 تصدير التقرير (Excel)", use_container_width=True):
-            # إنشاء تقرير Excel
-            output = pd.ExcelWriter("report.xlsx", engine="openpyxl")
-            
-            # تصدير المعاملات
-            if transactions:
-                pd.DataFrame(transactions_data).to_excel(output, sheet_name="Transactions", index=False)
-            
-            # تصدير المحفظة
-            if portfolio_summary['holdings']:
-                pd.DataFrame(holdings_data).to_excel(output, sheet_name="Portfolio", index=False)
-            
-            output.close()
-            
-            with open("report.xlsx", "rb") as f:
-                st.download_button(
-    label="⬇️ تحميل التقرير", 
-    data=st.session_state.get('last_analysis', ''), 
-    file_name="stock_analysis.txt"
-)
+
+# ============================================
+# تشغيل التطبيق
+# ============================================
+
+if __name__ == "__main__":
+    main()
