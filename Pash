@@ -1,0 +1,41 @@
+# ============================================
+# الخطوة 1: إنشاء المجلدات الرئيسية
+# ============================================
+
+# إنشاء المجلد الرئيسي
+mkdir egypt-stock-analyst
+cd egypt-stock-analyst
+
+# إنشاء الهيكل الكامل للمشروع
+mkdir -p {pages,assets,data,database,utils,logs,backups}
+mkdir -p .streamlit
+mkdir -p database/migrations
+mkdir -p utils/helpers
+
+# إنشاء الملفات الأساسية
+touch app.py
+touch requirements.txt
+touch README.md
+touch .gitignore
+touch docker-compose.yml
+touch Dockerfile
+touch .streamlit/secrets.toml
+touch .streamlit/config.toml
+
+# إنشاء ملفات قاعدة البيانات
+touch database/__init__.py
+touch database/models.py
+touch database/crud.py
+touch database/connection.py
+
+# إنشاء ملفات المساعدة
+touch utils/__init__.py
+touch/utils/telegram_bot.py
+touch utils/indicators.py
+touch utils/notifications.py
+
+# إنشاء ملفات الصفحات
+touch pages/1_📊_تحليل_الأسهم.py
+touch pages/2_📈_المحفظة.py
+touch pages/3_🤖_التنبيهات.py
+touch pages/4_⚙️_الإعدادات.py
