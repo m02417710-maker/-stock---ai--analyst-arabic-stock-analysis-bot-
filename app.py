@@ -21,7 +21,7 @@ st.set_page_config(
 from database.connection import init_db, get_db, backup_database
 from database.crud import *
 #from utils.indicators import calculate_indicators
-from utils.telegram_bot import TelegramNotifier
+#from utils.telegram_bot import TelegramNotifier
 from utils.notifications import NotificationManager
 
 # ============= التهيئة =============
