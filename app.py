@@ -379,4 +379,7 @@ def main():
             
             with open("report.xlsx", "rb") as f:
                 st.download_button(
-                    label="⬇️ تحت)
+    label="⬇️ تحميل التقرير", 
+    data=st.session_state.get('last_analysis', ''), 
+    file_name="stock_analysis.txt"
+)
