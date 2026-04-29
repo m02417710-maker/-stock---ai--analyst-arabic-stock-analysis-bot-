@@ -1,0 +1,118 @@
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import pandas_ta as ta
+import google.generativeai as genai
+import requests
+import plotly.graph_objects as go
+from datetime import datetime
+
+# ====================== 1. إعدادات الصفحة ======================
+st.set_page_config(page_title="المحلل الذكي - البورصة المصرية والعالمية", layout="wide")
+
+# قائمة البحث (يمكنك إضافة المزيد من الأسهم هنا)
+STOCK_DATABASE = {
+    "أرامكو (السعودية)": "2222.SR",
+    "الراجحي (السعودية)": "1120.SR",
+    "البنك التجاري الدولي (مصر)": "COMI.CA",
+    "طلعت مصطفى (مصر)": "TMGH.CA",
+    "فوري (مصر)": "FWRY.CA",
+    "حديد عز (مصر)": "ESRS.CA",
+    "أبو قير للأسمدة (مصر)": "ABUK.CA",
+    "إي فاينانس (مصر)": "EFIH.CA",
+    "النساجون الشرقيون (مصر)": "ORWE.CA",
+    "مصر للألومنيوم (مصر)": "EGAL.CA",
+    "آبل (أمريكا)": "AAPL",
+    "تسلا (أمريكا)": "TSLA"
+}
+
+# ====================== 2. الدوال الأساسية المحسنة ======================
+
+def send_telegram_msg(message):
+    try:
+        token = str(st.secrets["TELEGRAM_TOKEN"])
+        chat_id = str(st.secrets["TELEGRAM_CHAT_ID"])
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        res = requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"})
+        return res.ok
+    except: return False
+
+@st.cache_data(ttl=300) # تحديث كل 5 دقائق
+def get_data(ticker):
+    try:
+        df = yf.Ticker(ticker).history(period="1y")
+        if not df.empty:
+            df['RSI'] = ta.rsi(df['Close'], length=14)
+            df['EMA_20'] = ta.ema(df['Close'], length=20)
+            return df
+    except: return None
+
+# ====================== 3. الواجهة الجانبية (البحث والأخبار) ======================
+with st.sidebar:
+    st.title("🔍 البحث والتحكم")
+    search_query = st.selectbox("اختر أو اكتب اسم السهم:", options=list(STOCK_DATABASE.keys()))
+    ticker = STOCK_DATABASE[search_query]
+    
+    st.divider()
+    st.subheader("📰 أخبار السهم اللحظية")
+    try:
+        news = yf.Ticker(ticker).news[:5] # جلب آخر 5 أخبار
+        for item in news:
+            st.caption(f"🔗 [{item['title']}]({item['link']})")
+    except:
+        st.write("لا توجد أخبار حالياً")
+
+# ====================== 4. المحتوى الرئيسي ======================
+st.title(f"📊 تحليل سهم: {search_query}")
+
+data = get_data(ticker)
+
+if data is not None:
+    curr_p = data['Close'].iloc[-1]
+    change_p = ((curr_p - data['Close'].iloc[-2]) / data['Close'].iloc[-2]) * 100
+    
+    # صف المؤشرات الرئيسية
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("السعر الحالي", f"{curr_p:.2f}", f"{change_p:.2f}%")
+    c2.metric("RSI (قوة السهم)", f"{data['RSI'].iloc[-1]:.1f}")
+    
+    # حساب مؤشرات الخسارة والأرباح (قواعد مالية)
+    stop_loss = curr_p * 0.97 # وقف خسارة عند 3%
+    take_profit = curr_p * 1.05 # هدف أول عند 5%
+    c3.metric("🚫 وقف الخسارة", f"{stop_loss:.2f}", delta_color="inverse")
+    c4.metric("🎯 جني الأرباح", f"{take_profit:.2f}")
+
+    # الرسم البياني
+    fig = go.Figure(data=[go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name="السعر")])
+    fig.update_layout(template="plotly_dark", height=450)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # قسم أفضل 10 أسهم للربح اليومي (بناءً على التذبذب والسيولة)
+    st.divider()
+    st.subheader("⭐ أفضل 10 أسهم للمراقبة اليومية (فرص ربح)")
+    top_stocks = ["COMI.CA", "TMGH.CA", "FWRY.CA", "2222.SR", "1120.SR", "AAPL", "NVDA", "TSLA", "ESRS.CA", "ABUK.CA"]
+    st.info(f"الأسهم الأكثر نشاطاً حالياً: {', '.join(top_stocks)}")
+
+    # التحليل والذكاء الاصطناعي
+    if st.button("🧠 إجراء تحليل معمق (AI)"):
+        if "GEMINI_API_KEY" in st.secrets:
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            prompt = f"حلل سهم {ticker} فنياً. السعر {curr_p:.2f}، RSI {data['RSI'].iloc[-1]:.1f}. اذكر الدعم والمقاومة بالعربية."
+            res = model.generate_content(prompt)
+            st.session_state['last_analysis'] = res.text
+            st.success(res.text)
+        else:
+            st.error("مفتاح Gemini مفقود!")
+
+    # إرسال تلجرام
+    if 'last_analysis' in st.session_state:
+        if st.button("📢 إرسال التقرير لتلجرام"):
+            msg = f"📍 تحليل سهم {search_query}\nالسعر: {curr_p:.2f}\n\n{st.session_state['last_analysis']}"
+            if send_telegram_msg(msg):
+                st.toast("تم الإرسال!")
+            else:
+                st.error("خطأ في التلجرام. تأكد من الـ Secrets.")
+else:
+    st.error("تعذر جلب بيانات هذا السهم حالياً.")
