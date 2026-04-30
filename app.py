@@ -323,7 +323,6 @@ if df is not None and not df.empty:
             showlegend=True,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        
         fig.update_xaxes(title_text="التاريخ", row=3 if show_advanced else 2, col=1)
         fig.update_yaxes(title_text="السعر", row=1, col=1)
         fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100])
