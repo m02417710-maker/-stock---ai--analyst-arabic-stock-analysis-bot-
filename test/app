@@ -1,0 +1,51 @@
+import yfinance as yf
+import streamlit as st
+
+# 1. دالة الربط لجلب بيانات السهم والصناديق
+@st.cache_data(ttl=60) # تحديث البيانات كل دقيقة لضمان اللحظية
+def fetch_comprehensive_data(ticker_symbol):
+    try:
+        # الربط مع Yahoo Finance API
+        stock_engine = yf.Ticker(ticker_symbol)
+        
+        # جلب تاريخ السعر (Historical Data)
+        hist = stock_engine.history(period="1y")
+        
+        # جلب بيانات التوزيعات (Dividends)
+        dividends = stock_engine.dividends
+        
+        # جلب الأخبار المتعلقة بالسهم (News)
+        news = stock_engine.news
+        
+        # جلب معلومات الشركة (Info) - لأسهم الصناديق والشركات الكبرى
+        info = stock_engine.info
+        
+        return hist, dividends, news, info
+    except Exception as e:
+        st.error(f"خطأ في الربط مع Yahoo Finance لرمز {ticker_symbol}: {e}")
+        return None, None, None, None
+
+# 2. واجهة التطبيق لتنفيذ الربط
+st.title("🌐 الربط المباشر مع Yahoo Finance")
+
+ticker = st.text_input("أدخل رمز السهم أو الصندوق (مثلاً COMI.CA أو 2222.SR):", "COMI.CA")
+
+if ticker:
+    hist, divs, news, info = fetch_comprehensive_data(ticker)
+    
+    if hist is not None and not hist.empty:
+        # عرض السعر الحالي
+        current_price = hist['Close'].iloc[-1]
+        st.metric(label=f"سعر {ticker} اللحظي", value=f"{current_price:.2f} EGP")
+        
+        # عرض التوزيعات (Dividends)
+        st.subheader("💰 سجل توزيعات الأرباح")
+        if not divs.empty:
+            st.dataframe(divs.tail(10)) # عرض آخر 10 توزيعات
+        else:
+            st.info("لا توجد بيانات توزيعات متاحة لهذا الرمز.")
+            
+        # عرض الأخبار
+        st.subheader("📰 أخبار Yahoo Finance اللحظية")
+        for item in news[:3]:
+            st.write(f"🔹 [{item['title']}]({item['link']})")
