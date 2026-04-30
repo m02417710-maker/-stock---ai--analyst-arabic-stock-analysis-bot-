@@ -374,7 +374,7 @@ with tab3:
                 st.metric("عدد التوزيعات", len(divs))
         else:
             st.info("لا توجد بيانات توزيعات متاحة لهذا السهم")
-else:
+        else:
     st.error("❌ فشل جلب البيانات")
     
     st.markdown("""
