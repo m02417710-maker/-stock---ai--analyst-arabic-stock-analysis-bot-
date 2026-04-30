@@ -356,8 +356,7 @@ with tab2:
             - استخدم وقف الخسارة لحماية رأس المال
             - لا تستثمر أكثر مما تستطيع تحمل خسارته
             """)
-    
-    with tab3:
+with tab3:
         st.subheader("💰 توزيعات الأرباح")
         if not divs.empty:
             div_df = pd.DataFrame({
