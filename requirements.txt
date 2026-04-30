@@ -9,3 +9,8 @@ google-generativeai>=0.5.2
 python-dotenv
 requests
 SQLAlchemy
+# استبدال الاستيراد المباشر بـ try-except
+try:
+    from scipy.stats import norm, percentileofscore
+except ImportError:
+    st.error("مكتبة SciPy غير مثبتة. يرجى إضافتها لملف requirements.txt")
