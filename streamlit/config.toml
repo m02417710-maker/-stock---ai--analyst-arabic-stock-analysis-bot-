@@ -1,0 +1,7 @@
+# .streamlit/config.toml
+[theme]
+primaryColor = "#00ff87"          # اللون الأساسي (الأزرار والروابط)
+backgroundColor = "#0e1117"       # لون الخلفية (أسود احترافي)
+secondaryBackgroundColor = "#1e293b" # لون القوائم الجانبية والتبويبات
+textColor = "#ffffff"             # لون الخط
+font = "sans serif"               # نوع الخط
