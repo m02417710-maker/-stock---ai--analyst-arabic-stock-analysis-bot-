@@ -1,5 +1,5 @@
 # ============================================================
-# ملف: app_ultimate.py
+# ملف: app_ultimate_fixed.py
 # المحلل المصري Pro - الإصدار النهائي المتكامل مع جميع الأسهم
 # ============================================================
 
@@ -97,9 +97,7 @@ EGYPT_STOCKS = {
     "🇪🇬 جهينة للصناعات الغذائية": "JUFO.CA",
     "🇪🇬 أبو قير للأسمدة": "ABUK.CA",
     "🇪🇬 بنك مصر": "BMEL.CA",
-    "🇪🇬 المصرية للاتصالات": "ETEL.CA",
-    "🇪🇬 الإسكندرية للأدوية": "AXPH.CA",
-    "🇪🇬 جنوب الوادي للأسمنت": "SVCE.CA"
+    "🇪🇬 المصرية للاتصالات": "ETEL.CA"
 }
 
 # الأسهم السعودية (تداول)
@@ -121,9 +119,7 @@ SAUDI_STOCKS = {
     "🇸🇦 الحمادي": "4007.SR",
     "🇸🇦 دلة الصحية": "4170.SR",
     "🇸🇦 المواساة": "4015.SR",
-    "🇸🇦 التعاونية للتأمين": "8010.SR",
-    "🇸🇦 الراجحي للتأمين": "8230.SR",
-    "🇸🇦 بوبا العربية": "8210.SR"
+    "🇸🇦 التعاونية للتأمين": "8010.SR"
 }
 
 # الأسهم الأمريكية (NASDAQ & NYSE)
@@ -222,7 +218,7 @@ def calculate_score(df):
     rsi = last['RSI'] if not pd.isna(last['RSI']) else 50
     if rsi < 25:
         score += 2
-        signals.append(f"🔥 ذروة بيع شديدة - RSI: {rsi:.1f} (فرصة ممتازة)")
+        signals.append(f"🔥 ذروة بيع شديدة - RSI: {rsi:.1f}")
     elif rsi < 30:
         score += 1.5
         signals.append(f"✅ منطقة ذروة بيع - RSI: {rsi:.1f}")
@@ -234,7 +230,7 @@ def calculate_score(df):
         signals.append(f"📊 منطقة محايدة - RSI: {rsi:.1f}")
     elif rsi > 80:
         score -= 1.5
-        signals.append(f"⚠️ ذروة شراء شديدة - RSI: {rsi:.1f} (خطر)")
+        signals.append(f"⚠️ ذروة شراء شديدة - RSI: {rsi:.1f}")
     elif rsi > 70:
         score -= 1
         signals.append(f"⚠️ منطقة ذروة شراء - RSI: {rsi:.1f}")
@@ -245,10 +241,10 @@ def calculate_score(df):
     if 'MACD_12_26_9' in last and 'MACDs_12_26_9' in last:
         if last['MACD_12_26_9'] > last['MACDs_12_26_9']:
             score += 1
-            signals.append("🚀 MACD إيجابي - إشارة شراء")
+            signals.append("🚀 MACD إيجابي")
         else:
             score -= 0.5
-            signals.append("📉 MACD سلبي - إشارة بيع")
+            signals.append("📉 MACD سلبي")
     
     # 4. حجم التداول
     vol_ratio = last['Volume'] / last['Volume_MA'] if last['Volume_MA'] > 0 else 1
@@ -263,16 +259,7 @@ def calculate_score(df):
         signals.append(f"💰 سيولة أعلى من المعدل")
     elif vol_ratio < 0.5:
         score -= 0.5
-        signals.append(f"📉 سيولة ضعيفة جداً")
-    
-    # 5. بولنجر باند
-    if 'BBL_20_2.0' in last and 'BBU_20_2.0' in last:
-        if last['Close'] <= last['BBL_20_2.0']:
-            score += 1
-            signals.append("🎯 السعر عند الدعم - ارتداد محتمل")
-        elif last['Close'] >= last['BBU_20_2.0']:
-            score -= 0.5
-            signals.append("⚠️ السعر عند المقاومة - تصحيح محتمل")
+        signals.append(f"📉 سيولة ضعيفة")
     
     return min(max(score, 0), 5), signals
 
@@ -285,19 +272,19 @@ def get_trading_decision(df, score):
     rsi = last['RSI'] if not pd.isna(last['RSI']) else 50
     
     if score >= 4.5 or (rsi < 25 and last['Close'] > last['MA20']):
-        return "🔥 شراء قوي جداً", "#10b981", "🟢"
+        return "شراء قوي جدا", "#10b981", "🔥"
     elif score >= 4 or (rsi < 30 and last['Close'] > last['MA20']):
-        return "✅ شراء قوي", "#22c55e", "🟢"
+        return "شراء قوي", "#22c55e", "🟢"
     elif score >= 3 or (rsi < 35 and last['Close'] > last['MA20']):
-        return "📈 شراء محتمل", "#3b82f6", "📈"
+        return "شراء محتمل", "#3b82f6", "📈"
     elif score >= 2:
-        return "🟡 مراقبة / انتظار", "#f59e0b", "🟡"
+        return "مراقبة", "#f59e0b", "🟡"
     elif rsi > 80:
-        return "🔴 بيع عاجل", "#ef4444", "🔴"
+        return "بيع عاجل", "#ef4444", "🔴"
     elif rsi > 75 or score <= 1:
-        return "📉 بيع / تخفيض", "#f97316", "📉"
+        return "بيع", "#f97316", "📉"
     else:
-        return "⚪ احتفاظ", "#94a3b8", "⚪"
+        return "احتفاظ", "#94a3b8", "⚪"
 
 # ============================================================
 # دوال الرسم البياني
@@ -311,7 +298,7 @@ def create_advanced_chart(df, ticker, target_price, stop_loss, stock_name):
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.45, 0.2, 0.2, 0.15],
-        subplot_titles=("📈 السعر مع المتوسطات والمستهدفات", "📊 مؤشر RSI", "⚡ مؤشر MACD", "💰 حجم التداول")
+        subplot_titles=("السعر مع المتوسطات", "مؤشر RSI", "مؤشر MACD", "حجم التداول")
     )
     
     # الشموع اليابانية
@@ -353,7 +340,7 @@ def create_advanced_chart(df, ticker, target_price, stop_loss, stock_name):
     if target_price > 0:
         fig.add_hline(
             y=target_price, line_dash="dash", line_color="#10b981",
-            annotation_text=f"🎯 الهدف: {target_price:.2f}",
+            annotation_text=f"الهدف: {target_price:.2f}",
             annotation_position="top right", row=1, col=1
         )
     
@@ -361,7 +348,7 @@ def create_advanced_chart(df, ticker, target_price, stop_loss, stock_name):
     if stop_loss > 0:
         fig.add_hline(
             y=stop_loss, line_dash="dash", line_color="#ef4444",
-            annotation_text=f"🛑 وقف خسارة: {stop_loss:.2f}",
+            annotation_text=f"وقف: {stop_loss:.2f}",
             annotation_position="bottom right", row=1, col=1
         )
     
@@ -411,7 +398,7 @@ def create_advanced_chart(df, ticker, target_price, stop_loss, stock_name):
     )
     
     fig.update_layout(
-        title=f"📊 التحليل الفني لسهم {stock_name}",
+        title=f"التحليل الفني لسهم {stock_name}",
         template="plotly_dark",
         height=800,
         margin=dict(l=10, r=10, t=60, b=10),
@@ -427,11 +414,11 @@ def create_advanced_chart(df, ticker, target_price, stop_loss, stock_name):
     return fig
 
 # ============================================================
-# ماسح السوق (Market Scanner) - جميع الأسهم
+# ماسح السوق
 # ============================================================
 
 def scan_market_by_category(category):
-    """مسح الأسهم حسب الفئة المحددة"""
+    """مسح الأسهم حسب الفئة"""
     results = []
     
     if category == "مصر":
@@ -447,7 +434,7 @@ def scan_market_by_category(category):
     status_text = st.empty()
     
     for idx, (name, ticker) in enumerate(stocks.items()):
-        status_text.text(f"🔄 جاري مسح: {name}...")
+        status_text.text(f"جاري مسح: {name}...")
         df, _ = get_stock_data(ticker)
         
         if df is not None and not df.empty:
@@ -456,15 +443,15 @@ def scan_market_by_category(category):
             rsi = df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
             
             if score >= 4:
-                signal = "🟢🔥 فرصة شراء قوية جداً"
+                signal = "شراء قوي جدا"
             elif score >= 3:
-                signal = "🟢 فرصة شراء"
+                signal = "شراء"
             elif score >= 2:
-                signal = "🟡 مراقبة إيجابية"
+                signal = "مراقبة"
             elif score <= 1.5:
-                signal = "🔴 إشارة بيع/خروج"
+                signal = "بيع"
             else:
-                signal = "⚪ محايد"
+                signal = "محايد"
             
             results.append({
                 "السهم": name,
@@ -476,7 +463,7 @@ def scan_market_by_category(category):
             })
         
         progress_bar.progress((idx + 1) / len(stocks))
-        time.sleep(0.05)  # للتحكم في سرعة المسح
+        time.sleep(0.05)
     
     progress_bar.empty()
     status_text.empty()
@@ -490,28 +477,28 @@ def scan_market_by_category(category):
 def main():
     # شريط جانبي
     with st.sidebar:
-        st.markdown("## 📊 المحلل المصري Pro")
-        st.markdown("### 🤖 جميع أسهم البورصات")
+        st.markdown("## المحلل المصري Pro")
+        st.markdown("### جميع أسهم البورصات")
         st.markdown("---")
         
         # اختيار البورصة
-        st.markdown("### 🌍 اختيار البورصة")
+        st.markdown("### اختيار البورصة")
         exchange = st.radio(
             "",
-            ["🇪🇬 البورصة المصرية", "🇸🇦 السوق السعودي", "🇺🇸 السوق الأمريكي", "🌍 جميع الأسواق"],
+            ["البورصة المصرية", "السوق السعودي", "السوق الأمريكي", "جميع الأسواق"],
             label_visibility="collapsed"
         )
         
         st.markdown("---")
         
-        # اختيار السهم حسب البورصة
-        st.markdown("### 🔍 اختيار السهم")
+        # اختيار السهم
+        st.markdown("### اختيار السهم")
         
-        if exchange == "🇪🇬 البورصة المصرية":
+        if exchange == "البورصة المصرية":
             stock_list = EGYPT_STOCKS
-        elif exchange == "🇸🇦 السوق السعودي":
+        elif exchange == "السوق السعودي":
             stock_list = SAUDI_STOCKS
-        elif exchange == "🇺🇸 السوق الأمريكي":
+        elif exchange == "السوق الأمريكي":
             stock_list = US_STOCKS
         else:
             stock_list = ALL_STOCKS
@@ -519,46 +506,36 @@ def main():
         selected = st.selectbox("", list(stock_list.keys()), label_visibility="collapsed")
         ticker = stock_list[selected]
         
-        st.caption(f"📌 الرمز: `{ticker}`")
+        st.caption(f"الرمز: {ticker}")
         
         st.markdown("---")
         
-        # إحصائيات البورصات
-        st.markdown("### 📊 إحصائيات الأسهم")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("🇪🇬 مصر", len(EGYPT_STOCKS))
-        with col2:
-            st.metric("🇸🇦 السعودية", len(SAUDI_STOCKS))
-        
-        col3, col4 = st.columns(2)
-        with col3:
-            st.metric("🇺🇸 أمريكا", len(US_STOCKS))
-        with col4:
-            st.metric("🌍 الإجمالي", len(ALL_STOCKS))
+        # إحصائيات
+        st.markdown("### إحصائيات الأسهم")
+        st.metric("أسهم مصر", len(EGYPT_STOCKS))
+        st.metric("أسهم السعودية", len(SAUDI_STOCKS))
+        st.metric("أسهم أمريكا", len(US_STOCKS))
+        st.metric("الإجمالي", len(ALL_STOCKS))
         
         st.markdown("---")
         
-        # معلومات التحديث
-        st.markdown("### 📈 معلومات")
-        st.caption(f"🕐 الوقت: {datetime.now().strftime('%H:%M:%S')}")
-        st.caption(f"🔄 تحديث تلقائي كل 60 ثانية")
-        st.caption(f"📊 مصدر: Yahoo Finance")
+        st.caption(f"آخر تحديث: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption("تحديث تلقائي كل 60 ثانية")
+        st.caption("مصدر: Yahoo Finance")
         
         st.markdown("---")
         
-        # زر التحديث
-        if st.button("🔄 تحديث يدوي", use_container_width=True):
+        if st.button("تحديث يدوي", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
     
     # العنوان الرئيسي
-    st.markdown(f"## 📈 التحليل المتكامل لسهم {selected}")
+    st.markdown(f"## التحليل المتكامل لسهم {selected}")
     st.markdown(f"### {ticker}")
     st.markdown("---")
     
     # جلب البيانات
-    with st.spinner("🔄 جاري تحليل البيانات..."):
+    with st.spinner("جاري تحليل البيانات..."):
         df, info = get_stock_data(ticker)
     
     if df is not None and not df.empty:
@@ -583,25 +560,23 @@ def main():
         
         with col1:
             delta = f"{price_change:+.2f}%"
-            delta_color = "normal" if price_change >= 0 else "inverse"
-            st.metric("💰 السعر", f"{current_price:.2f}", delta, delta_color=delta_color)
+            st.metric("السعر", f"{current_price:.2f}", delta)
         
         with col2:
-            rsi_status = "🟢" if rsi < 40 else ("🔴" if rsi > 70 else "🟡")
-            st.metric("📊 RSI", f"{rsi:.1f} {rsi_status}")
+            st.metric("RSI", f"{rsi:.1f}")
         
         with col3:
-            st.metric("🎯 درجة الثقة", f"{score}/5")
+            st.metric("درجة الثقة", f"{score}/5")
         
         with col4:
-            st.metric("📋 القرار", f"{decision_icon} {decision}")
+            st.metric("القرار", f"{decision_icon} {decision}")
         
         with col5:
-            st.metric("🎯 الهدف", f"{target_price:.2f}")
+            st.metric("الهدف", f"{target_price:.2f}")
         
         st.markdown("---")
         
-        # بطاقة القرار الموسعة
+        # بطاقة القرار
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
                     border: 2px solid {decision_color};
@@ -611,17 +586,14 @@ def main():
                 {decision_icon} {decision} {decision_icon}
             </h2>
             <p style="color: #94a3b8; margin: 10px 0 0 0;">
-                🛑 وقف الخسارة: {stop_loss:.2f} | 🎯 الهدف الأول: {target_price:.2f}
-            </p>
-            <p style="color: #64748b; margin: 5px 0 0 0; font-size: 12px;">
-                الهدف البعيد: {(target_price * 1.05):.2f} | المخاطرة: {((target_price - current_price) / (current_price - stop_loss)):.2f}
+                وقف الخسارة: {stop_loss:.2f} | الهدف: {target_price:.2f}
             </p>
         </div>
         """, unsafe_allow_html=True)
         
         # التبويبات
         tab1, tab2, tab3, tab4 = st.tabs([
-            "📈 الرسم البياني", "📋 التحليل الفني", "🔍 ماسح السوق", "🏢 معلومات الشركة"
+            "الرسم البياني", "التحليل الفني", "ماسح السوق", "معلومات الشركة"
         ])
         
         with tab1:
@@ -629,28 +601,23 @@ def main():
             st.plotly_chart(fig, use_container_width=True, key="main_chart")
         
         with tab2:
-            st.subheader("📋 تفاصيل التحليل الفني")
+            st.subheader("تفاصيل التحليل الفني")
             
-            # عرض الإشارات
             for signal in signals:
                 if "✅" in signal or "🚀" in signal or "🔥" in signal or "💰" in signal:
                     st.success(signal)
-                elif "⚠️" in signal or "⚠" in signal or "🔴" in signal:
+                elif "⚠️" in signal:
                     st.warning(signal)
                 else:
                     st.info(signal)
             
             st.markdown("---")
             
-            # جدول المؤشرات
-            st.subheader("📊 المؤشرات الحالية")
+            st.subheader("المؤشرات الحالية")
             last = df.iloc[-1]
             
             indicators_data = {
-                "المؤشر": [
-                    "السعر الحالي", "المتوسط المتحرك 20", "المتوسط المتحرك 50",
-                    "المتوسط المتحرك 200", "RSI", "الدعم", "المقاومة"
-                ],
+                "المؤشر": ["السعر", "MA20", "MA50", "MA200", "RSI", "الدعم", "المقاومة"],
                 "القيمة": [
                     f"{last['Close']:.2f}",
                     f"{last['MA20']:.2f}",
@@ -659,22 +626,13 @@ def main():
                     f"{last['RSI']:.1f}",
                     f"{last['Support']:.2f}",
                     f"{last['Resistance']:.2f}"
-                ],
-                "الحالة": [
-                    f"{'+' if last['Close'] > last['MA20'] else '-'}",
-                    "-", "-", "-",
-                    "ذروة بيع" if last['RSI'] < 30 else ("ذروة شراء" if last['RSI'] > 70 else "طبيعي"),
-                    "دعم رئيسي",
-                    "مقاومة رئيسية"
                 ]
             }
-            
             st.dataframe(pd.DataFrame(indicators_data), use_container_width=True, hide_index=True)
         
         with tab3:
-            st.subheader("🔍 ماسح السوق الذكي")
+            st.subheader("ماسح السوق الذكي")
             
-            # خيارات الماسح
             scan_option = st.radio(
                 "اختر نطاق المسح:",
                 ["مسح البورصة الحالية", "مسح جميع البورصات"],
@@ -682,72 +640,73 @@ def main():
             )
             
             if scan_option == "مسح البورصة الحالية":
-                if exchange == "🇪🇬 البورصة المصرية":
+                if exchange == "البورصة المصرية":
                     scan_category = "مصر"
-                elif exchange == "🇸🇦 السوق السعودي":
+                elif exchange == "السوق السعودي":
                     scan_category = "السعودية"
-                elif exchange == "🇺🇸 السوق الأمريكي":
+                elif exchange == "السوق الأمريكي":
                     scan_category = "أمريكا"
                 else:
                     scan_category = "الكل"
             else:
                 scan_category = "الكل"
             
-            if st.button("🚀 تشغيل الماسح الضوئي", use_container_width=True):
+            if st.button("تشغيل الماسح الضوئي", use_container_width=True):
                 results_df = scan_market_by_category(scan_category)
                 
                 if not results_df.empty:
-                    st.success(f"✅ تم مسح {len(results_df)} سهماً")
+                    st.success(f"تم مسح {len(results_df)} سهما")
                     
-                    # عرض أفضل الفرص
-                    st.subheader("🏆 أفضل فرص الشراء")
+                    st.subheader("أفضل فرص الشراء")
                     buy_opportunities = results_df[results_df['الإشارة'].str.contains("شراء")]
                     if not buy_opportunities.empty:
                         st.dataframe(buy_opportunities.head(10), use_container_width=True, hide_index=True)
                     else:
-                        st.info("لا توجد فرص شراء قوية حالياً")
+                        st.info("لا توجد فرص شراء قوية حاليا")
                     
-                    st.markdown("---")
-                    
-                    # عرض جميع النتائج
-                    with st.expander("📊 عرض جميع النتائج", expanded=False):
+                    with st.expander("عرض جميع النتائج", expanded=False):
                         st.dataframe(results_df, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("⚠️ لا توجد بيانات كافية للمسح")
-            
-            # دليل المستخدم للماسح
-            with st.expander("ℹ️ دليل استخدام الماسح", expanded=False):
-                st.markdown("""
-                ### كيفية استخدام الماسح:
-                
-                1. **اختر نطاق المسح** (البورصة الحالية أو جميع البورصات)
-                2. **اضغط على زر التشغيل**
-                3. **انتظر حتى اكتمال المسح** (قد يستغرق 30-60 ثانية)
-                4. **شاهد أفضل الفرص** حسب درجة الثقة
-                
-                ### تفسير الإشارات:
-                - 🟢🔥 **فرصة شراء قوية جداً** - درجة الثقة 4-5
-                - 🟢 **فرصة شراء** - درجة الثقة 3-4
-                - 🟡 **مراقبة إيجابية** - درجة الثقة 2-3
-                - 🔴 **إشارة بيع/خروج** - درجة الثقة 0-1.5
-                """)
+                    st.warning("لا توجد بيانات كافية للمسح")
         
         with tab4:
             if info:
-                st.subheader("🏢 معلومات الشركة")
+                st.subheader("معلومات الشركة")
                 
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.markdown(f"**🏢 الاسم:** {info.get('longName', 'غير متوفر')}")
-                    st.markdown(f"**🏭 القطاع:** {info.get('sector', 'غير متوفر')}")
-                    st.markdown(f"**📋 الصناعة:** {info.get('industry', 'غير متوفر')}")
-                    st.markdown(f"**🌍 الدولة:** {info.get('country', 'غير متوفر')}")
-                    st.markdown(f"**🌐 الموقع:** {info.get('website', 'غير متوفر')}")
+                    st.markdown(f"**الاسم:** {info.get('longName', 'غير متوفر')}")
+                    st.markdown(f"**القطاع:** {info.get('sector', 'غير متوفر')}")
+                    st.markdown(f"**الصناعة:** {info.get('industry', 'غير متوفر')}")
+                    st.markdown(f"**الدولة:** {info.get('country', 'غير متوفر')}")
                 
                 with col2:
                     if info.get('marketCap'):
-                        st.markdown(f"**💰 القيمة السوقية:** ${info.get('marketCap', 0):,}")
+                        st.markdown(f"**القيمة السوقية:** ${info.get('marketCap', 0):,}")
                     if info.get('trailingPE'):
-                        st.markdown(f"**📊 مكرر الأرباح:** {info.get('trailingPE', 'غير متوفر')}")
-                    if info.get('dividend
+                        st.markdown(f"**مكرر الأرباح:** {info.get('trailingPE', 'غير متوفر')}")
+                    if info.get('dividendYield'):
+                        st.markdown(f"**عائد التوزيعات:** {info.get('dividendYield', 0)*100:.2f}%")
+                
+                if info.get('longBusinessSummary'):
+                    st.markdown("---")
+                    st.markdown("**نبذة عن الشركة:**")
+                    st.markdown(info.get('longBusinessSummary')[:500] + "...")
+            else:
+                st.info("معلومات الشركة غير متوفرة حاليا")
+    
+    else:
+        st.error("فشل في جلب البيانات")
+        st.info("""
+        تأكد من:
+        - صحة رمز السهم
+        - اتصال الإنترنت
+        - إعادة المحاولة بعد دقيقة
+        """)
+    
+    st.markdown("---")
+    st.caption("تنويه: هذا التحليل لأغراض تعليمية فقط | البيانات من Yahoo Finance | تحديث تلقائي كل 60 ثانية")
+
+if __name__ == "__main__":
+    main()
