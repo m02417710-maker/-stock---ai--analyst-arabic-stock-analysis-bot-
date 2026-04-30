@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import sqlite3
 from pathlib import Path
 import warnings
@@ -15,8 +14,7 @@ warnings.filterwarnings('ignore')
 st.set_page_config(
     page_title="المحلل المصري المتكامل Pro", 
     page_icon="📈", 
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 def apply_custom_style():
@@ -37,43 +35,20 @@ def apply_custom_style():
             padding: 10px 20px;
         }
         .stTabs [aria-selected="true"] { background-color: #2962ff !important; }
-        div[data-testid="stAlert"] { border-radius: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
 apply_custom_style()
 
-# ====================== 2. إعداد قاعدة البيانات ======================
-def init_database():
-    db_path = Path("stock_analyzer.db")
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS user_preferences
-                 (id INTEGER PRIMARY KEY, watchlist TEXT, last_ticker TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS price_alerts
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT, 
-                  target_price REAL, created_at TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-
-init_database()
-
-# ====================== 3. محرك البيانات المعدل (بدون session مخصص) ======================
+# ====================== 2. محرك البيانات ======================
 @st.cache_data(ttl=900, show_spinner=False)
 def get_cleaned_data(ticker):
-    """جلب البيانات - بدون تحديد session لحل مشكلة curl_cffi"""
+    """جلب البيانات من Yahoo Finance"""
     try:
-        # لا نمرر session مخصص - نترك yfinance يتعامل معها
         stock = yf.Ticker(ticker)
-        
-        # محاولة جلب البيانات
-        df = stock.history(period="6mo", interval="1d")
+        df = stock.history(period="6mo")
         
         if df.empty or len(df) < 10:
-            # محاولة بديلة بفترة أقصر
-            df = stock.history(period="3mo")
-            
-        if df.empty:
             return None, None, None, None
         
         # حساب المؤشرات الفنية
@@ -100,9 +75,6 @@ def get_cleaned_data(ticker):
         df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
         df['MACD_Hist'] = df['MACD'] - df['Signal']
         
-        # حجم التداول
-        df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
-        
         # جلب بيانات إضافية
         try:
             dividends = stock.dividends
@@ -114,24 +86,14 @@ def get_cleaned_data(ticker):
         except:
             info = {}
         
-        # جلب الأخبار (بدون session)
         news_items = []
-        try:
-            # طريقة بديلة للحصول على الأخبار
-            if hasattr(stock, 'news'):
-                news_items = stock.news[:5] if stock.news else []
-        except:
-            news_items = []
         
         return df, dividends, news_items, info
         
     except Exception as e:
-        # لا نطبع الخطأ الكامل، فقط رسالة مبسطة
-        if "curl_cffi" in str(e):
-            st.warning("⚠️ يرجى تثبيت مكتبة curl_cffi: pip install curl_cffi")
         return None, None, None, None
 
-# ====================== 4. دوال التحليل ======================
+# ====================== 3. دوال التحليل ======================
 def calculate_support_resistance(df):
     """حساب الدعم والمقاومة"""
     if len(df) < 30:
@@ -148,7 +110,6 @@ def get_trading_signal(df):
         return "🟡 غير متوفر", [], 0
     
     last = df.iloc[-1]
-    prev = df.iloc[-2] if len(df) > 1 else last
     
     signals = []
     score = 0
@@ -162,13 +123,12 @@ def get_trading_signal(df):
         score -= 1
     
     # MACD
-    if 'MACD' in last and 'Signal' in last:
-        if last['MACD'] > last['Signal']:
-            signals.append("📈 MACD إيجابي")
-            score += 1
-        else:
-            signals.append("📉 MACD سلبي")
-            score -= 1
+    if last['MACD'] > last['Signal']:
+        signals.append("📈 MACD إيجابي")
+        score += 1
+    else:
+        signals.append("📉 MACD سلبي")
+        score -= 1
     
     # السعر والمتوسطات
     if last['Close'] > last['SMA20']:
@@ -187,7 +147,7 @@ def get_trading_signal(df):
     
     return recommendation, signals, score
 
-# ====================== 5. قائمة الأسهم ======================
+# ====================== 4. قائمة الأسهم ======================
 STOCKS_DB = {
     "البنك التجاري الدولي (مصر)": "COMI.CA",
     "طلعت مصطفى (مصر)": "TMGH.CA",
@@ -200,7 +160,7 @@ STOCKS_DB = {
     "مايكروسوفت (أمريكا)": "MSFT"
 }
 
-# ====================== 6. الواجهة الجانبية ======================
+# ====================== 5. الواجهة الجانبية ======================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2422/2422796.png", width=60)
     st.title("المحلل المصري Pro")
@@ -214,22 +174,20 @@ with st.sidebar:
     
     st.divider()
     
-    analysis_period = st.selectbox("فترة التحليل:", ["1mo", "3mo", "6mo", "1y"], index=2)
     show_advanced = st.checkbox("إظهار المؤشرات المتقدمة", value=True)
     
     if st.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
         st.cache_data.clear()
-        st.success("✅ تم التحديث!")
         st.rerun()
     
     st.caption(f"📊 Yahoo Finance")
     st.caption(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
 
-# ====================== 7. العرض الرئيسي ======================
-st.markdown(f"## 📊 تحليل: `{ticker}`")
+# ====================== 6. العرض الرئيسي ======================
+st.markdown(f"## 📊 تحليل ومراقبة: `{ticker}`")
 st.markdown("---")
 
-with st.spinner("🔄 جاري التحميل..."):
+with st.spinner("🔄 جاري تحميل البيانات..."):
     df, divs, news, info = get_cleaned_data(ticker)
 
 if df is not None and not df.empty:
@@ -249,12 +207,12 @@ if df is not None and not df.empty:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("💰 السعر", f"{last_price:.2f}", f"{price_change:+.2f}%")
+        st.metric("💰 السعر الحالي", f"{last_price:.2f}", f"{price_change:+.2f}%")
     with col2:
-        rsi_status = "ذروة شراء" if rsi_val > 70 else ("ذروة بيع" if rsi_val < 30 else "متوسط")
-        st.metric(f"📊 RSI ({rsi_status})", f"{rsi_val:.1f}")
+        rsi_status = "ذروة شراء" if rsi_val > 70 else ("ذروة بيع" if rsi_val < 30 else "محايد")
+        st.metric(f"📊 مؤشر RSI ({rsi_status})", f"{rsi_val:.1f}")
     with col3:
-        st.metric("🎯 مقاومة/دعم", f"{resistance:.2f} / {support:.2f}")
+        st.metric("🎯 مقاومة / دعم", f"{resistance:.2f} / {support:.2f}")
     with col4:
         st.metric("📈 حجم التداول", f"{current_volume/1000000:.1f}M", f"{volume_ratio:.0f}%")
     
@@ -268,74 +226,134 @@ if df is not None and not df.empty:
         <h3 style='margin: 0; color: {color_map.get(recommendation, "#ffffff")}'>
             {recommendation}
         </h3>
-        <p style='margin: 5px 0 0 0;'>درجة الإشارة: {signal_score:.1f}</p>
+        <p style='margin: 5px 0 0 0; opacity: 0.8;'>درجة الإشارة: {signal_score:.1f}/3</p>
     </div>
     """, unsafe_allow_html=True)
     
     if signals:
-        with st.expander("📋 تفاصيل الإشارات", expanded=False):
+        with st.expander("📋 تفاصيل الإشارات الفنية", expanded=False):
             for s in signals:
                 st.markdown(f"- {s}")
     
     # ========== التبويبات ==========
-    tab1, tab2, tab3 = st.tabs(["📈 الرسم البياني", "📰 الأخبار", "💰 التوزيعات"])
+    tab1, tab2, tab3 = st.tabs(["📈 الرسم البياني", "📰 معلومات السهم", "💰 التوزيعات"])
     
     with tab1:
         if show_advanced:
-            fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
-                                vertical_spacing=0.05,
-                                row_heights=[0.5, 0.25, 0.25],
-                                subplot_titles=("السعر والمتوسطات", "RSI", "MACD"))
+            fig = make_subplots(
+                rows=3, cols=1, 
+                shared_xaxes=True,
+                vertical_spacing=0.05,
+                row_heights=[0.5, 0.25, 0.25],
+                subplot_titles=("السعر والمتوسطات", "مؤشر RSI", "مؤشر MACD")
+            )
             
             # السعر
-            fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'],
-                                         low=df['Low'], close=df['Close'], name="السعر"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name="SMA 20",
-                                     line=dict(color='#ff9800')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name="SMA 50",
-                                     line=dict(color='#4caf50')), row=1, col=1)
+            fig.add_trace(go.Candlestick(
+                x=df.index, open=df['Open'], high=df['High'],
+                low=df['Low'], close=df['Close'], name="السعر"
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['SMA20'], name="SMA 20",
+                line=dict(color='#ff9800', width=1.5)
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['SMA50'], name="SMA 50",
+                line=dict(color='#4caf50', width=1.5)
+            ), row=1, col=1)
+            
+            # Bollinger Bands
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['BB_Upper'], name="BB علوي",
+                line=dict(color='gray', dash='dash'), opacity=0.5
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['BB_Lower'], name="BB سفلي",
+                line=dict(color='gray', dash='dash'), opacity=0.5,
+                fill='tonexty', fillcolor='rgba(128,128,128,0.1)'
+            ), row=1, col=1)
             
             # RSI
-            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name="RSI",
-                                     line=dict(color='#ff5722')), row=2, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['RSI'], name="RSI",
+                line=dict(color='#ff5722', width=2)
+            ), row=2, col=1)
             fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
             fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+            fig.add_hrect(y0=30, y1=70, fillcolor="green", opacity=0.1, row=2, col=1)
             
             # MACD
-            fig.add_trace(go.Bar(x=df.index, y=df['MACD_Hist'], name="MACD Hist",
-                                 marker_color='#2962ff'), row=3, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name="MACD",
-                                     line=dict(color='#ff9800')), row=3, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name="Signal",
-                                     line=dict(color='#4caf50')), row=3, col=1)
+            fig.add_trace(go.Bar(
+                x=df.index, y=df['MACD_Hist'], name="MACD Hist",
+                marker_color='#2962ff'
+            ), row=3, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['MACD'], name="MACD",
+                line=dict(color='#ff9800', width=2)
+            ), row=3, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['Signal'], name="Signal",
+                line=dict(color='#4caf50', width=2)
+            ), row=3, col=1)
             
         else:
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                row_heights=[0.7, 0.3])
-            fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'],
-                                         low=df['Low'], close=df['Close'], name="السعر"), row=1, col=1)
-            fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="الحجم",
-                                 marker_color='#2962ff'), row=2, col=1)
+            fig = make_subplots(
+                rows=2, cols=1, 
+                shared_xaxes=True,
+                row_heights=[0.7, 0.3],
+                vertical_spacing=0.05
+            )
+            fig.add_trace(go.Candlestick(
+                x=df.index, open=df['Open'], high=df['High'],
+                low=df['Low'], close=df['Close'], name="السعر"
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['SMA20'], name="SMA 20",
+                line=dict(color='#ff9800')
+            ), row=1, col=1)
+            fig.add_trace(go.Bar(
+                x=df.index, y=df['Volume'], name="الحجم",
+                marker_color='#2962ff'
+            ), row=2, col=1)
         
-        fig.update_layout(template="plotly_dark", height=600, margin=dict(t=30))
+        fig.update_layout(
+            template="plotly_dark",
+            height=650,
+            margin=dict(t=50, b=0, l=0, r=0),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        fig.update_xaxes(title_text="التاريخ", row=3 if show_advanced else 2, col=1)
         fig.update_yaxes(title_text="السعر", row=1, col=1)
-        fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100]) if show_advanced else None
+        fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100])
+        fig.update_yaxes(title_text="MACD", row=3, col=1) if show_advanced else None
+        
         st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
-        st.subheader("📰 آخر الأخبار")
-        if news:
-            for item in news[:5]:
-                title = item.get('title', 'خبر')
-                st.markdown(f"🔹 {title}")
+        st.subheader("ℹ️ معلومات الشركة")
+        
+        if info:
+            cols = st.columns(2)
+            with cols[0]:
+                st.markdown("**القطاع:** " + str(info.get('sector', 'غير متوفر')))
+                st.markdown("**السوق:** " + str(info.get('market', 'غير متوفر')))
+                st.markdown("**العملة:** " + str(info.get('currency', 'غير متوفر')))
+            with cols[1]:
+                if info.get('marketCap'):
+                    st.markdown(f"**القيمة السوقية:** ${info.get('marketCap', 0):,}")
+                if info.get('trailingPE'):
+                    st.markdown(f"**نسبة السعر للربح:** {info.get('trailingPE', 'غير متوفر')}")
+                if info.get('dividendYield'):
+                    st.markdown(f"**عائد التوزيعات:** {info.get('dividendYield', 0)*100:.2f}%")
         else:
-            st.info("لا توجد أخبار متاحة حالياً")
+            st.info("لا توجد معلومات إضافية متاحة")
             
-            # معلومات مفيدة
             st.markdown("""
             ### 💡 نصائح للمستثمر:
-            - ركز على التحليل الفني والأساسي معاً
-            - حدد نقاط الدخول والخروج قبل التداول
+            - قم بتحليل المؤشرات الفنية قبل اتخاذ القرار
+            - حدد نقاط الدخول والخروج مسبقاً
             - استخدم وقف الخسارة لحماية رأس المال
             - لا تستثمر أكثر مما تستطيع تحمل خسارته
             """)
@@ -343,23 +361,51 @@ if df is not None and not df.empty:
     with tab3:
         st.subheader("💰 توزيعات الأرباح")
         if not divs.empty:
-            div_df = pd.DataFrame({'التاريخ': divs.index.strftime('%Y-%m-%d'), 'القيمة': divs.values})
+            div_df = pd.DataFrame({
+                'التاريخ': divs.index.strftime('%Y-%m-%d'),
+                'قيمة التوزيع': divs.values
+            })
             st.dataframe(div_df, use_container_width=True, hide_index=True)
             
             col1, col2, col3 = st.columns(3)
-            col1.metric("الإجمالي", f"{divs.sum():.2f}")
-            col2.metric("المتوسط", f"{divs.mean():.3f}")
-            col3.metric("عدد التوزيعات", len(divs))
+            with col1:
+                st.metric("إجمالي التوزيعات", f"{divs.sum():.2f}")
+            with col2:
+                st.metric("متوسط التوزيع", f"{divs.mean():.3f}")
+            with col3:
+                st.metric("عدد التوزيعات", len(divs))
         else:
-            st.info("لا توجد بيانات توزيعات متاحة")
+            st.info("لا توجد بيانات توزيعات متاحة لهذا السهم")
 
 else:
-    # ========== رسالة الخطأ المحسنة ==========
-    st.error("❌ فشل في جلب البيانات")
+    st.error("❌ فشل جلب البيانات")
     
     st.markdown("""
-    ### 🔧 حلول سريعة:
+    ### 📋 الحلول المقترحة:
     
-    1. **تثبيت المكتبة المطلوبة** (افتح Terminal):
-    ```bash
-    pip install curl_cffi
+    1. **تأكد من صحة رمز السهم:**
+       - للأسهم الأمريكية: استخدم الرمز فقط (AAPL, TSLA)
+       - للأسهم السعودية: أضف .SR (2222.SR)
+       - للأسهم المصرية: أضف .CA (COMI.CA)
+    
+    2. **انتظر 15 دقيقة:** قد يكون هناك حظر مؤقت من Yahoo Finance
+    
+    3. **جرب رمز آخر:** تأكد من أن السهم لا يزال مدرجاً في البورصة
+    
+    ---
+    
+    ### ✅ أمثلة لرموز صحيحة:
+    - `AAPL` (آبل)
+    - `TSLA` (تسلا)
+    - `2222.SR` (أرامكو السعودية)
+    - `COMI.CA` (البنك التجاري المصري)
+    """)
+
+# ====================== 7. تذييل الصفحة ======================
+st.markdown("---")
+st.caption("""
+**تنويه مهم:** هذا التحليل لأغراض تعليمية فقط وليس توصية استثمارية.
+يُنصح بالتشاور مع مستشار مالي قبل اتخاذ أي قرارات استثمارية.
+
+البيانات مقدمة من Yahoo Finance | تحديث دوري كل 15 دقيقة
+""")
