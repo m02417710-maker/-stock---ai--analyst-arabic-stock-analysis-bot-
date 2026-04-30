@@ -331,7 +331,6 @@ if df is not None and not df.empty:
         # أضف key فريد لكل رسم بياني
 st.plotly_chart(fig, use_container_width=True, key="unique_chart_01")
 
-    
     with tab2:
         st.subheader("ℹ️ معلومات الشركة")
         
