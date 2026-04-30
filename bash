@@ -10,3 +10,5 @@ python run_local_scanner.py
 
 # وفي نافذة أخرى تشغيل الواجهة
 streamlit run app.py
+# استخدام Docker
+docker-compose up -d
