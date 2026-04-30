@@ -1,0 +1,49 @@
+# --- إضافة دالة جلب التوزيعات والأرباح ---
+def get_dividends(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        divs = stock.dividends
+        if not divs.empty:
+            return divs.tail(5) # جلب آخر 5 توزيعات
+        return None
+    except:
+        return None
+
+# --- تحديث قاعدة البيانات لتشمل الصناديق وأدوات الاستثمار ---
+INVESTMENT_TOOLS = {
+    "الأسهم القيادية (EGX30)": "COMI.CA",
+    "صندوق مؤشر EGX30 (ETF)": "EGX30ETF.CA",
+    "صندوق الذهب (AZ-Gold)": "AZG.CA",
+    "صندوق النقد (السيولة)": "CI30.CA",
+    "بلتون المالية": "BTFH.CA",
+    "هيرميس القابضة": "HRHO.CA"
+}
+
+# --- في قسم العرض الرئيسي (Main UI) ---
+st.title("🏛️ منصة البورصة المصرية الشاملة")
+
+# خيار البحث عن أي سهم غير موجود في القائمة
+manual_ticker = st.text_input("🔍 ابحث عن أي سهم أو صندوق (مثال: ESRS.CA):", placeholder="اكتب رمز السهم المتبوع بـ .CA")
+if manual_ticker:
+    ticker = manual_ticker.upper()
+    search_query = ticker
+else:
+    ticker = STOCK_DATABASE[search_query] # القائمة القديمة
+
+# --- قسم جديد للتوزيعات الفنية ---
+with st.expander("💰 سجل توزيعات الأرباح (Dividends)"):
+    div_data = get_dividends(ticker)
+    if div_data is not None:
+        st.write(f"آخر توزيعات للسهم {ticker}:")
+        st.table(div_data)
+    else:
+        st.info("لا توجد بيانات توزيعات أرباح متاحة لهذا الرمز حالياً.")
+
+# --- قسم صناديق الاستثمار ---
+st.divider()
+st.subheader("🏦 صناديق الاستثمار والأسهم الواعدة")
+cols = st.columns(len(INVESTMENT_TOOLS))
+for i, (name, symbol) in enumerate(INVESTMENT_TOOLS.items()):
+    if cols[i].button(name):
+        ticker = symbol
+        st.rerun()
