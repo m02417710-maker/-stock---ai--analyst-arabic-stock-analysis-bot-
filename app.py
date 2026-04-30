@@ -1,41 +1,35 @@
 # ============================================================
-# ملف: stock_analyzer_enhanced.py
-# الوصف: محلل أسهم متكامل مع pandas_ta و Streamlit
-# الإصدار: 4.0.0
+# ملف: stock_analyzer_v6.py
+# الإصدار المتطور: نظام نقاط ذكي + تقارير + واجهة محسنة + دمج كامل
 # ============================================================
-
-# ============================================================
-# 1. المكتبات المطلوبة (قم بتثبيتها أولاً)
-# ============================================================
-# pip install streamlit yfinance pandas numpy plotly pandas-ta streamlit-autorefresh
 
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import pandas_ta as ta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import pandas_ta as ta
-from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
 import warnings
 warnings.filterwarnings('ignore')
 
 # ============================================================
-# 2. إعدادات الصفحة والتصميم
+# إعدادات الصفحة والتصميم المتقدم
 # ============================================================
 
 st.set_page_config(
-    page_title="المحلل المصري المتكامل Pro",
+    page_title="المحلل المصري Pro - V6",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# تصميم CSS مخصص
+# تصميم CSS محسن
 st.markdown("""
 <style>
-/* تنسيق الخلفية الرئيسية */
+/* تنسيق الخلفية */
 .stApp {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
 }
@@ -104,13 +98,7 @@ st.markdown("""
     border: 1px solid #334155;
     border-radius: 12px;
     color: white;
-}
-
-/* تنسيق القوائم المنسدلة */
-.stSelectbox > div > div {
-    background: #1e293b;
-    border-radius: 12px;
-    border: 1px solid #334155;
+    font-size: 16px;
 }
 
 /* تنسيق أشرطة التوسيع */
@@ -120,154 +108,196 @@ st.markdown("""
     color: #e2e8f0;
     font-weight: 600;
 }
+
+/* تنسيق الـ JSON viewer */
+.stJson {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 15px;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 3. قائمة الأسهم
+# قائمة الأسهم السريعة
 # ============================================================
 
-STOCKS_DATABASE = {
-    "🇪🇬 البنك التجاري الدولي (مصر)": "COMI.CA",
-    "🇪🇬 طلعت مصطفى (مصر)": "TMGH.CA",
-    "🇪🇬 فوري (مصر)": "FWRY.CA",
-    "🇸🇦 أرامكو (السعودية)": "2222.SR",
-    "🇸🇦 الراجحي (السعودية)": "1120.SR",
-    "🇸🇦 STC (السعودية)": "7010.SR",
-    "🇺🇸 آبل (أمريكا)": "AAPL",
-    "🇺🇸 تسلا (أمريكا)": "TSLA",
-    "🇺🇸 مايكروسوفت (أمريكا)": "MSFT",
-    "🇺🇸 إنفيديا (أمريكا)": "NVDA",
-    "🇺🇸 أمازون (أمريكا)": "AMZN",
-    "🇺🇸 جوجل (أمريكا)": "GOOGL"
+QUICK_STOCKS = {
+    "🇪🇬 البنك التجاري الدولي": "COMI.CA",
+    "🇪🇬 طلعت مصطفى": "TMGH.CA",
+    "🇪🇬 فوري": "FWRY.CA",
+    "🇸🇦 أرامكو": "2222.SR",
+    "🇸🇦 الراجحي": "1120.SR",
+    "🇺🇸 آبل": "AAPL",
+    "🇺🇸 تسلا": "TSLA",
+    "🇺🇸 مايكروسوفت": "MSFT",
+    "🇺🇸 إنفيديا": "NVDA"
 }
 
 # ============================================================
-# 4. دوال جلب البيانات وحساب المؤشرات
+# دالة حساب النقاط المتطورة (Smart Weighting)
+# ============================================================
+
+def calculate_smart_score(df):
+    """حساب درجة ذكية مع أوزان مختلفة لكل مؤشر"""
+    if df.empty or len(df) < 20:
+        return 0, [], {}
+    
+    score = 0
+    reasons = []
+    details = {}
+    last = df.iloc[-1]
+    
+    # 1. الاتجاه العام (الوزن: 1.0)
+    if last['Close'] > last['MA20']:
+        score += 1.0
+        reasons.append("✅ السعر فوق المتوسط 20 (اتجاه صاعد)")
+        details['trend'] = 'up'
+    else:
+        reasons.append("⚠️ السعر تحت المتوسط 20 (اتجاه هابط)")
+        details['trend'] = 'down'
+        score -= 0.5
+    
+    # 2. مؤشر القوة النسبية RSI (الوزن: 1.5)
+    rsi = last['RSI']
+    details['rsi'] = round(rsi, 1)
+    
+    if rsi <= 30:
+        score += 1.5
+        reasons.append(f"🔥 فرصة ذهبية: ذروة بيع شديدة ({rsi:.1f})")
+    elif 30 < rsi <= 40:
+        score += 1.2
+        reasons.append(f"✅ منطقة شراء ممتازة ({rsi:.1f})")
+    elif 40 < rsi < 55:
+        score += 0.8
+        reasons.append(f"✅ RSI في منطقة تجميع آمنة ({rsi:.1f})")
+    elif 55 <= rsi < 70:
+        score += 0.2
+        reasons.append(f"📊 RSI في منطقة محايدة ({rsi:.1f})")
+    elif rsi >= 70:
+        score -= 1.0
+        reasons.append(f"⚠️ تحذير: ذروة شراء شديدة ({rsi:.1f})")
+    
+    # 3. تقاطع MACD (الوزن: 1.5) - مؤشر قوي جداً
+    if 'MACD_12_26_9' in last and 'MACDs_12_26_9' in last:
+        macd = last['MACD_12_26_9']
+        signal = last['MACDs_12_26_9']
+        details['macd'] = round(macd, 3)
+        details['macd_signal'] = round(signal, 3)
+        
+        if macd > signal:
+            score += 1.5
+            reasons.append("🚀 إشارة اختراق MACD إيجابية قوية")
+            details['macd_cross'] = 'bullish'
+        else:
+            score -= 0.5
+            reasons.append("📉 تقاطع MACD سلبي")
+            details['macd_cross'] = 'bearish'
+    
+    # 4. السيولة وحجم التداول (الوزن: 1.0)
+    vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
+    current_vol = last['Volume']
+    vol_ratio = (current_vol / vol_ma) * 100 if vol_ma > 0 else 100
+    details['volume_ratio'] = round(vol_ratio, 1)
+    
+    if current_vol > vol_ma:
+        score += 1.0
+        reasons.append(f"💰 سيولة مؤسسية أعلى من المعدل ({vol_ratio:.0f}%)")
+    else:
+        reasons.append(f"📉 حجم تداول أقل من المعدل ({vol_ratio:.0f}%)")
+        score -= 0.3
+    
+    # 5. البولنجر باند (الوزن: 0.5)
+    if 'BBL_20_2.0' in last and 'BBU_20_2.0' in last:
+        if last['Close'] <= last['BBL_20_2.0']:
+            score += 0.8
+            reasons.append("🎯 السعر عند الحد السفلي لبولنجر - ارتداد محتمل")
+            details['bb_position'] = 'lower'
+        elif last['Close'] >= last['BBU_20_2.0']:
+            score -= 0.5
+            reasons.append("⚠️ السعر عند الحد العلوي لبولنجر - تصحيح محتمل")
+            details['bb_position'] = 'upper'
+        else:
+            details['bb_position'] = 'middle'
+    
+    # تحديد مستوى الثقة
+    if score >= 4.5:
+        confidence = "🔥 قوي جداً"
+    elif score >= 3.5:
+        confidence = "✅ قوي"
+    elif score >= 2.5:
+        confidence = "🟡 متوسط"
+    elif score >= 1.5:
+        confidence = "⚠️ ضعيف"
+    else:
+        confidence = "🔴 ضعيف جداً"
+    
+    details['confidence'] = confidence
+    details['final_score'] = round(score, 1)
+    
+    return round(score, 1), reasons, details
+
+# ============================================================
+# دالة جلب البيانات مع دعم المعلومات المالية
 # ============================================================
 
 @st.cache_data(ttl=900, show_spinner=False)
-def fetch_stock_data(ticker):
-    """جلب بيانات السهم من Yahoo Finance"""
+def get_full_data(ticker):
+    """جلب البيانات الكاملة للسهم مع المؤشرات الفنية"""
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period="6mo", interval="1d")
+        df = stock.history(period="1y", interval="1d")
         
         if df.empty or len(df) < 20:
-            return None, None, None
+            return None, None
         
         # حساب المؤشرات الفنية باستخدام pandas_ta
-        # RSI
         df['RSI'] = ta.rsi(df['Close'], length=14)
-        
-        # المتوسطات المتحركة
         df['MA20'] = ta.sma(df['Close'], length=20)
         df['MA50'] = ta.sma(df['Close'], length=50)
         df['MA200'] = ta.sma(df['Close'], length=200)
         
         # Bollinger Bands
-        bbands = ta.bbands(df['Close'], length=20, std=2)
-        df = pd.concat([df, bbands], axis=1)
+        bb = ta.bbands(df['Close'], length=20, std=2)
+        if bb is not None:
+            df = pd.concat([df, bb], axis=1)
         
         # MACD
         macd = ta.macd(df['Close'])
-        df = pd.concat([df, macd], axis=1)
+        if macd is not None:
+            df = pd.concat([df, macd], axis=1)
         
         # حجم التداول المتوسط
         df['Volume_MA20'] = df['Volume'].rolling(window=20).mean()
         
-        # معلومات إضافية
-        try:
-            info = stock.info
-        except:
-            info = {}
+        # حساب نطاق اليوم
+        df['Day_High'] = df['High']
+        df['Day_Low'] = df['Low']
+        df['Day_Range'] = ((df['High'] - df['Low']) / df['Low']) * 100
         
-        try:
-            dividends = stock.dividends
-        except:
-            dividends = pd.Series()
-        
-        return df, dividends, info
+        return df, stock.info
         
     except Exception as e:
         st.error(f"خطأ في جلب البيانات: {str(e)}")
-        return None, None, None
-
-def calculate_trading_score(df):
-    """حساب درجة التداول بناءً على الشروط"""
-    
-    if df.empty or len(df) < 20:
-        return 0, ["لا توجد بيانات كافية"]
-    
-    score = 0
-    reasons = []
-    last = df.iloc[-1]
-    
-    # الشرط 1: السعر فوق المتوسط المتحرك (اتجاه صاعد)
-    if last['Close'] > last['MA20']:
-        score += 1
-        reasons.append("✅ السعر فوق المتوسط 20 (اتجاه صاعد)")
-    else:
-        reasons.append("⚠️ السعر تحت المتوسط 20 (اتجاه هابط)")
-    
-    # الشرط 2: RSI في منطقة شراء (ليس متضخماً)
-    rsi = last['RSI']
-    if not pd.isna(rsi):
-        if 30 < rsi < 60:
-            score += 1
-            reasons.append(f"✅ RSI في منطقة تجميع ({rsi:.1f})")
-        elif rsi <= 30:
-            reasons.append(f"🔴 RSI في منطقة ذروة بيع ({rsi:.1f}) - فرصة شراء")
-            score += 1  # فرصة شراء جيدة
-        elif rsi >= 70:
-            reasons.append(f"🟡 RSI في منطقة ذروة شراء ({rsi:.1f}) - توخ الحذر")
-            score -= 1
-        else:
-            reasons.append(f"📊 RSI محايد ({rsi:.1f})")
-    
-    # الشرط 3: حجم التداول أعلى من المتوسط
-    if last['Volume'] > last['Volume_MA20']:
-        score += 1
-        reasons.append("✅ حجم تداول مرتفع (سيولة جيدة)")
-    else:
-        reasons.append("📉 حجم تداول أقل من المتوسط")
-    
-    # الشرط 4: البولنجر باند (ارتداد من الحد السفلي)
-    if 'BBL_20_2.0' in last and 'BBU_20_2.0' in last:
-        if last['Close'] <= last['BBL_20_2.0']:
-            score += 1
-            reasons.append("✅ السعر عند الحد السفلي لبولنجر - ارتداد محتمل")
-        elif last['Close'] >= last['BBU_20_2.0']:
-            reasons.append("⚠️ السعر عند الحد العلوي لبولنجر - تصحيح محتمل")
-            score -= 0.5
-    
-    # الشرط 5: MACD إيجابي
-    if 'MACD_12_26_9' in last and 'MACDs_12_26_9' in last:
-        if last['MACD_12_26_9'] > last['MACDs_12_26_9']:
-            score += 1
-            reasons.append("✅ MACD إيجابي (إشارة شراء)")
-        else:
-            reasons.append("📉 MACD سلبي (إشارة بيع)")
-            score -= 0.5
-    
-    return score, reasons
+        return None, None
 
 # ============================================================
-# 5. دوال الرسم البياني
+# دالة الرسم البياني المتقدم
 # ============================================================
 
 def create_advanced_chart(df, ticker):
-    """إنشاء رسم بياني متقدم مع الشموع والمؤشرات"""
+    """إنشاء رسم بياني متكامل مع جميع المؤشرات"""
     
     fig = make_subplots(
         rows=4, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.5, 0.15, 0.2, 0.15],
-        subplot_titles=("السعر والمؤشرات", "RSI", "MACD", "حجم التداول")
+        subplot_titles=("📈 السعر والمؤشرات", "📊 مؤشر القوة النسبية RSI", "⚡ مؤشر MACD", "💰 حجم التداول")
     )
     
-    # الرسم البياني الرئيسي - الشموع اليابانية
+    # ===== الرسم البياني الرئيسي =====
+    # الشموع اليابانية
     fig.add_trace(
         go.Candlestick(
             x=df.index,
@@ -281,7 +311,7 @@ def create_advanced_chart(df, ticker):
         row=1, col=1
     )
     
-    # خطوط المتوسطات المتحركة
+    # المتوسطات المتحركة
     fig.add_trace(
         go.Scatter(
             x=df.index, y=df['MA20'],
@@ -326,7 +356,7 @@ def create_advanced_chart(df, ticker):
             row=1, col=1
         )
     
-    # RSI
+    # ===== مؤشر RSI =====
     fig.add_trace(
         go.Scatter(
             x=df.index, y=df['RSI'],
@@ -343,7 +373,7 @@ def create_advanced_chart(df, ticker):
     fig.add_hrect(y0=0, y1=30, fillcolor="#10b981", opacity=0.2, row=2, col=1)
     fig.add_hline(y=50, line_dash="dash", line_color="#94a3b8", row=2, col=1)
     
-    # MACD
+    # ===== مؤشر MACD =====
     if 'MACD_12_26_9' in df.columns:
         # هيستوجرام MACD
         macd_hist = df['MACD_12_26_9'] - df['MACDs_12_26_9']
@@ -377,7 +407,7 @@ def create_advanced_chart(df, ticker):
             row=3, col=1
         )
     
-    # حجم التداول
+    # ===== حجم التداول =====
     volume_colors = ['#ef4444' if df['Close'].iloc[i] < df['Open'].iloc[i] else '#10b981' 
                      for i in range(len(df))]
     
@@ -394,7 +424,7 @@ def create_advanced_chart(df, ticker):
     fig.add_trace(
         go.Scatter(
             x=df.index, y=df['Volume_MA20'],
-            name="متوسط الحجم",
+            name="متوسط 20 يوم",
             line=dict(color='#3b82f6', width=2, dash='dash')
         ),
         row=4, col=1
@@ -408,7 +438,7 @@ def create_advanced_chart(df, ticker):
             font=dict(size=20, color='#f1f5f9')
         ),
         template="plotly_dark",
-        height=800,
+        height=850,
         margin=dict(l=10, r=10, t=60, b=10),
         plot_bgcolor='rgba(15, 23, 42, 0.9)',
         paper_bgcolor='rgba(15, 23, 42, 0)',
@@ -432,203 +462,78 @@ def create_advanced_chart(df, ticker):
     return fig
 
 # ============================================================
-# 6. واجهة المستخدم
-# ============================================================
-
-def render_sidebar():
-    """عرض الشريط الجانبي"""
-    
-    with st.sidebar:
-        # الشعار
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="font-size: 26px; background: linear-gradient(135deg, #2563eb, #7c3aed); 
-                       -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                📊 المحلل المصري Pro
-            </h1>
-            <p style="color: #94a3b8; font-size: 12px;">النسخة المتطورة مع pandas_ta</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # اختيار السهم
-        st.markdown("#### 🔍 اختيار السهم")
-        
-        selected_stock = st.selectbox(
-            "من القائمة:",
-            options=list(STOCKS_DATABASE.keys()),
-            label_visibility="collapsed"
-        )
-        
-        custom_ticker = st.text_input(
-            "أو أدخل الرمز يدوياً:",
-            placeholder="مثال: AAPL, TSLA, 2222.SR",
-            key="ticker_input"
-        )
-        
-        ticker = custom_ticker.strip().upper() if custom_ticker else STOCKS_DATABASE[selected_stock]
-        
-        st.info(f"📌 الرمز الحالي: `{ticker}`")
-        
-        st.markdown("---")
-        
-        # التحديث التلقائي
-        st.markdown("#### 🔄 التحديث التلقائي")
-        st.caption("يتم تحديث البيانات كل 15 دقيقة")
-        
-        if st.button("🔄 تحديث البيانات الآن", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-        
-        st.markdown("---")
-        
-        # نصائح سريعة
-        with st.sidebar.expander("💡 نصائح سريعة"):
-            st.markdown("""
-            ### 📊 مؤشر RSI
-            - **RSI < 30:** منطقة ذروة بيع (فرصة شراء)
-            - **RSI > 70:** منطقة ذروة شراء (توخ الحذر)
-            - **RSI 40-60:** منطقة محايدة
-            
-            ### 📈 المتوسطات المتحركة
-            - **السعر > MA20:** اتجاه صاعد قصير
-            - **السعر < MA20:** اتجاه هابط قصير
-            - **MA20 > MA50:** تأكيد صعودي
-            
-            ### 🎯 Bollinger Bands
-            - **السعر عند الحد السفلي:** ارتداد محتمل
-            - **السعر عند الحد العلوي:** تصحيح محتمل
-            - **انكماش البولنجر:** هدوء قبل حركة قوية
-            
-            ### ⚡ MACD
-            - **MACD > Signal:** إشارة شراء
-            - **MACD < Signal:** إشارة بيع
-            - **تقاطع عند خط الصفر:** إشارة قوية
-            """)
-    
-    return ticker
-
-def render_metrics(df, score, reasons):
-    """عرض بطاقات المؤشرات"""
-    
-    if df.empty:
-        return
-    
-    current_price = df['Close'].iloc[-1]
-    prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
-    price_change = ((current_price - prev_price) / prev_price) * 100
-    
-    current_volume = df['Volume'].iloc[-1]
-    avg_volume = df['Volume_MA20'].iloc[-1] if not pd.isna(df['Volume_MA20'].iloc[-1]) else current_volume
-    volume_ratio = (current_volume / avg_volume) * 100 if avg_volume > 0 else 100
-    
-    rsi = df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        delta_color = "normal" if price_change >= 0 else "inverse"
-        st.metric(
-            label="💰 السعر الحالي",
-            value=f"{current_price:.2f}",
-            delta=f"{price_change:+.2f}%",
-            delta_color=delta_color
-        )
-    
-    with col2:
-        if rsi < 30:
-            rsi_status = "🟢 ذروة بيع"
-        elif rsi > 70:
-            rsi_status = "🔴 ذروة شراء"
-        else:
-            rsi_status = "🟡 محايد"
-        st.metric(
-            label=f"📊 RSI ({rsi_status})",
-            value=f"{rsi:.1f}"
-        )
-    
-    with col3:
-        st.metric(
-            label="📈 حجم التداول",
-            value=f"{current_volume/1000000:.1f}M",
-            delta=f"{volume_ratio:.0f}% من المتوسط"
-        )
-    
-    with col4:
-        st.metric(
-            label="📊 درجة الإشارة",
-            value=f"{score}/5",
-            help="كلما زادت النقاط، زادت قوة الإشارة"
-        )
-
-def render_signal_section(score, reasons):
-    """عرض قسم الإشارات والتحليل"""
-    
-    # تحديد التوصية
-    if score >= 4:
-        recommendation = "🟢 إشارة شراء قوية جداً"
-        color = "#10b981"
-        icon = "🔥"
-    elif score >= 3:
-        recommendation = "🟢 إشارة شراء إيجابية"
-        color = "#22c55e"
-        icon = "📈"
-    elif score >= 2:
-        recommendation = "🟡 ميل للشراء"
-        color = "#f59e0b"
-        icon = "⚡"
-    elif score <= 1:
-        recommendation = "🔴 إشارة بيع أو انتظار"
-        color = "#ef4444"
-        icon = "⚠️"
-    else:
-        recommendation = "⚪ وضع محايد"
-        color = "#94a3b8"
-        icon = "➖"
-    
-    # عرض التوصية
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-                border-radius: 20px; padding: 20px; margin: 15px 0;
-                border: 1px solid {color}40;">
-        <div style="text-align: center;">
-            <h2 style="color: {color}; margin: 0;">
-                {icon} {recommendation} {icon}
-            </h2>
-            <p style="color: #94a3b8; margin: 10px 0 0 0;">
-                درجة الإشارة: {score}/5
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # عرض تفاصيل الإشارات
-    with st.expander("📋 تفاصيل الإشارات الفنية", expanded=True):
-        for reason in reasons:
-            st.markdown(reason)
-
-# ============================================================
-# 7. التشغيل الرئيسي
+# الواجهة الرئيسية
 # ============================================================
 
 def main():
     """الدالة الرئيسية لتشغيل التطبيق"""
     
     # التحديث التلقائي كل 15 دقيقة
-    st_autorefresh(interval=900000, key="auto_refresh")
+    st_autorefresh(interval=900000, key="auto_refresh_v6")
     
-    # عرض الشريط الجانبي
-    ticker = render_sidebar()
+    # ===== الشريط الجانبي =====
+    with st.sidebar:
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="font-size: 24px; background: linear-gradient(135deg, #2563eb, #7c3aed); 
+                       -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                📊 المحلل المصري Pro
+            </h1>
+            <p style="color: #94a3b8; font-size: 12px;">الإصدار V6 - نظام النقاط الذكي</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # اختيار سريع
+        st.markdown("#### 🚀 اختيار سريع")
+        quick_select = st.selectbox("أسعار سريعة:", list(QUICK_STOCKS.keys()))
+        
+        st.markdown("#### 🔍 إدخال يدوي")
+        ticker = st.text_input("رمز السهم:", value=QUICK_STOCKS[quick_select]).upper()
+        
+        st.markdown("---")
+        
+        # أزرار التحكم
+        if st.button("🔄 تحديث شامل", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+        
+        st.markdown("---")
+        
+        # معلومات إضافية
+        st.markdown("#### ℹ️ معلومات")
+        st.caption(f"🕐 تحديث تلقائي كل 15 دقيقة")
+        st.caption(f"📊 مصدر البيانات: Yahoo Finance")
+        st.caption(f"⚡ الإصدار: V6.0.0")
+        
+        st.markdown("---")
+        
+        # نصائح سريعة
+        with st.expander("💡 دليل الإشارات", expanded=False):
+            st.markdown("""
+            ### 🎯 نظام النقاط (من 0 إلى 5+)
+            - **4.5+:** 🔥 فرصة شراء قوية جداً
+            - **3.5 - 4.5:** ✅ إشارة شراء إيجابية
+            - **2.5 - 3.5:** 🟡 وضع محايد مع ميل للإيجابية
+            - **1.5 - 2.5:** ⚠️ توخ الحذر
+            - **< 1.5:** 🔴 انتظار أو بيع
+            
+            ### 📊 قراءة المؤشرات
+            - **RSI < 30:** منطقة ذروة بيع (فرصة شراء)
+            - **RSI > 70:** منطقة ذروة شراء (توخ الحذر)
+            - **MACD > Signal:** إشارة صاعدة
+            - **السعر > MA20:** اتجاه صاعد قصير
+            """)
     
-    # العنوان الرئيسي
+    # ===== العنوان الرئيسي =====
     st.markdown(f'<h2 style="text-align: center; color: #f1f5f9;">📊 تحليل ومراقبة: {ticker}</h2>', 
                 unsafe_allow_html=True)
     st.markdown("---")
     
-    # جلب البيانات
+    # ===== جلب البيانات =====
     with st.spinner("🔄 جاري تحليل البيانات وحساب المؤشرات..."):
-        df, dividends, info = fetch_stock_data(ticker)
+        df, info = get_full_data(ticker)
     
     if df is None or df.empty:
         st.error("❌ لا يمكن جلب البيانات")
@@ -640,52 +545,137 @@ def main():
         """, unsafe_allow_html=True)
         return
     
-    # حساب درجة التداول
-    score, reasons = calculate_trading_score(df)
+    # ===== حساب النقاط الذكية =====
+    score, reasons, details = calculate_smart_score(df)
     
-    # عرض بطاقات المؤشرات
-    render_metrics(df, score, reasons)
+    # ===== معلومات سريعة =====
+    current_price = df['Close'].iloc[-1]
+    prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
+    price_change = ((current_price - prev_price) / prev_price) * 100
     
-    # عرض الإشارات
-    render_signal_section(score, reasons)
+    current_volume = df['Volume'].iloc[-1]
+    avg_volume = df['Volume_MA20'].iloc[-1] if not pd.isna(df['Volume_MA20'].iloc[-1]) else current_volume
+    volume_ratio = (current_volume / avg_volume) * 100 if avg_volume > 0 else 100
+    
+    # عرض البطاقات
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        delta_color = "normal" if price_change >= 0 else "inverse"
+        st.metric("💰 السعر", f"{current_price:.2f}", f"{price_change:+.2f}%", delta_color=delta_color)
+    
+    with col2:
+        rsi = details.get('rsi', 50)
+        rsi_status = "🟢 ذروة بيع" if rsi < 30 else ("🔴 ذروة شراء" if rsi > 70 else "🟡 محايد")
+        st.metric(f"📊 RSI ({rsi_status})", f"{rsi:.1f}")
+    
+    with col3:
+        st.metric("📈 الحجم", f"{current_volume/1000000:.1f}M", f"{volume_ratio:.0f}%")
+    
+    with col4:
+        st.metric("🎯 درجة الثقة", f"{score}/5", details.get('confidence', ''))
+    
+    with col5:
+        # تحديد التوصية
+        if score >= 4:
+            rec = "🔥 شراء قوي"
+            rec_color = "#10b981"
+        elif score >= 3:
+            rec = "✅ شراء محتمل"
+            rec_color = "#22c55e"
+        elif score >= 2:
+            rec = "🟡 ترقب"
+            rec_color = "#f59e0b"
+        else:
+            rec = "🔴 انتظار/بيع"
+            rec_color = "#ef4444"
+        st.metric("📋 التوصية", rec)
     
     st.markdown("---")
     
-    # التبويبات الرئيسية
-    tab1, tab2, tab3 = st.tabs(["📈 الرسوم البيانية", "💰 التوزيعات", "ℹ️ معلومات الشركة"])
+    # ===== بطاقة التوصية الموسعة =====
+    if score >= 4:
+        rec_title = "🔥 فرصة شراء قوية جداً"
+        rec_color = "#10b981"
+        rec_icon = "🚀"
+    elif score >= 3:
+        rec_title = "✅ إشارة شراء إيجابية"
+        rec_color = "#22c55e"
+        rec_icon = "📈"
+    elif score >= 2:
+        rec_title = "🟡 وضع محايد مع ميل للإيجابية"
+        rec_color = "#f59e0b"
+        rec_icon = "⚡"
+    elif score >= 1:
+        rec_title = "⚠️ توخ الحذر - إشارات متضاربة"
+        rec_color = "#fb923c"
+        rec_icon = "⚠️"
+    else:
+        rec_title = "🔴 انتظار أو بيع - إشارات سلبية"
+        rec_color = "#ef4444"
+        rec_icon = "📉"
     
-    with tab1:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                border-radius: 20px; padding: 25px; margin: 15px 0;
+                border: 2px solid {rec_color}40;">
+        <div style="text-align: center;">
+            <h2 style="color: {rec_color}; margin: 0;">
+                {rec_icon} {rec_title} {rec_icon}
+            </h2>
+            <p style="color: #94a3b8; margin: 10px 0 0 0; font-size: 18px;">
+                درجة الثقة: {score}/5 | {details.get('confidence', '')}
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ===== عرض تفاصيل الإشارات =====
+    with st.expander("📋 تفاصيل الإشارات الفنية (نظام النقاط الذكي)", expanded=True):
+        col_left, col_right = st.columns([2, 1])
+        
+        with col_left:
+            st.markdown("#### 🎯 نقاط القوة")
+            for reason in reasons:
+                if reason.startswith("✅") or reason.startswith("🔥") or reason.startswith("🚀") or reason.startswith("💰"):
+                    st.markdown(reason)
+        
+        with col_right:
+            st.markdown("#### 📊 ملخص المؤشرات")
+            st.markdown(f"- **RSI:** {details.get('rsi', 'N/A')}")
+            st.markdown(f"- **MACD:** {details.get('macd', 'N/A')}")
+            st.markdown(f"- **حجم التداول:** {details.get('volume_ratio', 'N/A')}% من المتوسط")
+            st.markdown(f"- **الاتجاه:** {details.get('trend', 'N/A')}")
+            if 'macd_cross' in details:
+                st.markdown(f"- **MACD تقاطع:** {details.get('macd_cross', 'N/A')}")
+    
+    st.markdown("---")
+    
+    # ===== التبويبات الرئيسية =====
+    tab_chart, tab_info, tab_reports = st.tabs(["📈 الرسم البياني", "🏢 بيانات الشركة", "📄 تقارير وتصدير"])
+    
+    with tab_chart:
         # الرسم البياني المتقدم
         fig = create_advanced_chart(df, ticker)
-        st.plotly_chart(fig, use_container_width=True, key="main_chart")
-    
-    with tab2:
-        st.subheader("💰 تاريخ توزيعات الأرباح")
+        st.plotly_chart(fig, use_container_width=True, key="advanced_chart_v6")
         
-        if not dividends.empty:
-            div_df = pd.DataFrame({
-                'التاريخ': dividends.index.strftime('%Y-%m-%d'),
-                'القيمة': dividends.values
-            })
-            st.dataframe(div_df, use_container_width=True, hide_index=True)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("إجمالي التوزيعات", f"{dividends.sum():.3f}")
-            with col2:
-                st.metric("متوسط التوزيع", f"{dividends.mean():.3f}")
-            with col3:
-                st.metric("آخر توزيع", f"{dividends.iloc[-1]:.3f}" if len(dividends) > 0 else "لا يوجد")
-        else:
-            st.info("📭 لا توجد بيانات توزيعات أرباح متاحة لهذا السهم")
+        # جدول آخر 10 أيام
+        st.markdown("---")
+        st.subheader("📋 آخر 10 أيام تداول")
+        recent_df = df.tail(10)[['Open', 'High', 'Low', 'Close', 'Volume', 'RSI']].round(2)
+        recent_df.index = recent_df.index.strftime('%Y-%m-%d')
+        recent_df.columns = ['الافتتاح', 'الأعلى', 'الأدنى', 'الإغلاق', 'الحجم', 'RSI']
+        st.dataframe(recent_df, use_container_width=True)
     
-    with tab3:
-        st.subheader("ℹ️ معلومات الشركة")
+    with tab_info:
+        st.subheader("🏢 معلومات الشركة")
         
         if info:
+            # معلومات أساسية
             col1, col2 = st.columns(2)
             
             with col1:
+                st.markdown("#### 📋 معلومات عامة")
                 st.markdown(f"**🏢 الاسم:** {info.get('longName', 'غير متوفر')}")
                 st.markdown(f"**🏭 القطاع:** {info.get('sector', 'غير متوفر')}")
                 st.markdown(f"**📋 الصناعة:** {info.get('industry', 'غير متوفر')}")
@@ -693,6 +683,7 @@ def main():
                 st.markdown(f"**🌐 الموقع:** {info.get('website', 'غير متوفر')}")
             
             with col2:
+                st.markdown("#### 💰 معلومات مالية")
                 if info.get('marketCap'):
                     st.markdown(f"**💰 القيمة السوقية:** ${info.get('marketCap', 0):,}")
                 if info.get('trailingPE'):
@@ -703,21 +694,103 @@ def main():
                     st.markdown(f"**📈 معامل بيتا:** {info.get('beta', 'غير متوفر')}")
                 if info.get('52WeekHigh'):
                     st.markdown(f"**🎯 أعلى 52 أسبوع:** ${info.get('52WeekHigh', 'غير متوفر')}")
+                if info.get('52WeekLow'):
+                    st.markdown(f"**🎯 أدنى 52 أسبوع:** ${info.get('52WeekLow', 'غير متوفر')}")
+            
+            # وصف الشركة
+            st.markdown("---")
+            st.markdown("#### 📝 وصف الشركة")
+            st.markdown(info.get('longBusinessSummary', 'لا يوجد وصف متاح')[:800] + "...")
+            
+            # بيانات JSON كاملة
+            with st.expander("🔍 عرض جميع البيانات (JSON)"):
+                st.json(info)
         else:
             st.info("📭 معلومات الشركة غير متوفرة حالياً")
     
-    # تذييل الصفحة
-    st.markdown("---")
-    st.markdown(f"""
-    <div style="text-align: center; color: #64748b; font-size: 12px;">
-        <p>📊 تم التحليل بواسطة <strong>المحلل المصري Pro</strong> | pandas_ta | Yahoo Finance</p>
-        <p>🕐 آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        <p>⚠️ <strong>تنويه:</strong> هذا التحليل لأغراض تعليمية فقط، وليس توصية استثمارية</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ============================================================
-# تشغيل التطبيق
-# ============================================================
-if __name__ == "__main__":
-    main()
+    with tab_reports:
+        st.subheader("📄 تقارير وتصدير البيانات")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 تقرير التحليل")
+            st.markdown(f"**السهم:** {ticker}")
+            st.markdown(f"**التاريخ:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            st.markdown(f"**درجة الثقة:** {score}/5 - {details.get('confidence', '')}")
+            st.markdown(f"**التوصية:** {rec_title}")
+            st.markdown("---")
+            st.markdown("**نقاط القوة:**")
+            for reason in reasons[:5]:
+                st.markdown(f"- {reason}")
+        
+        with col2:
+            st.markdown("#### 📥 تصدير البيانات")
+            
+            # تحميل CSV
+            csv_data = df[['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'MA20', 'MA50']].round(2).to_csv()
+            st.download_button(
+                label="📥 تحميل بيانات التحليل (CSV)",
+                data=csv_data,
+                file_name=f"{ticker}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+            st.markdown("---")
+            
+            # تحميل التقرير النصي
+            report_text = f"""
+            ========================================
+            تقرير تحليل سهم {ticker}
+            ========================================
+            
+            التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            
+            -------- المعلومات الأساسية --------
+            السعر الحالي: {current_price:.2f}
+            التغير: {price_change:+.2f}%
+            حجم التداول: {current_volume/1000000:.1f}M
+            نسبة الحجم: {volume_ratio:.0f}%
+            
+            -------- المؤشرات الفنية --------
+            RSI: {details.get('rsi', 'N/A')}
+            MACD: {details.get('macd', 'N/A')}
+            إشارة MACD: {details.get('macd_cross', 'N/A')}
+            الاتجاه: {details.get('trend', 'N/A')}
+            
+            -------- التوصية --------
+            درجة الثقة: {score}/5
+            مستوى الثقة: {details.get('confidence', '')}
+            التوصية النهائية: {rec_title}
+            
+            -------- نقاط القوة --------
+            {chr(10).join(['- ' + r for r in reasons[:5]])}
+            
+            ========================================
+            تنويه: هذا التحليل لأغراض تعليمية فقط
+            ========================================
+            """
+            
+            st.download_button(
+                label="📄 تحميل تقرير نصي (TXT)",
+                data=report_text,
+                file_name=f"{ticker}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        st.markdown("---")
+        
+        # رسم بياني إضافي للمؤشرات
+        st.subheader("📈 تطور المؤشرات الفنية")
+        
+        fig2 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.5, 0.5])
+        
+        fig2.add_trace(
+            go.Scatter(x=df.index, y=df['Close'], name="السعر", line=dict(color='#3b82f6')),
+            row=1, col=1
+        )
+        fig2.add_trace(
+            go.Scatter(x=df.index, y=df['RSI'], name="RSI", line=dict(color='#8b5cf6')),
+            row=
