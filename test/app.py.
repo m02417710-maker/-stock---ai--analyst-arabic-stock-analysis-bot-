@@ -1,0 +1,27 @@
+# إنشاء التبويبات بأسماء واضحة وأيقونات جذابة
+tab_chart, tab_ai, tab_finance, tab_news = st.tabs([
+    "📈 الرسم البياني اللحظي", 
+    "🤖 مساعد Gemini الذكي", 
+    "💰 الأرباح والتوزيعات", 
+    "📰 آخر أخبار السوق"
+])
+
+with tab_chart:
+    # نضع هنا الشارت فقط ليكون كبيراً وواضحاً
+    st.plotly_chart(fig, use_container_width=True)
+    # يمكن إضافة مؤشرات بسيطة أسفل الشارت (مثل الحجم Volume)
+
+with tab_ai:
+    # نضع هنا أزرار التفاعل مع الذكاء الاصطناعي
+    # ونتيجة التحليل في حاوية (Success) لتبدو بارزة
+    if st.button("بدء التحليل المعمق"):
+        st.info("التحليل الفني للسهم يشير إلى...")
+
+with tab_finance:
+    # نستخدم الأعمدة داخل التبويب لتقسيم البيانات المالية
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.subheader("سجل التوزيعات")
+        # جدول البيانات المالية
+    with col_right:
+        st.subheader("أداء الصناديق")
