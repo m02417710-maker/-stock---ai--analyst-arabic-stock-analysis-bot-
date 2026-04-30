@@ -1,6 +1,6 @@
 # ============================================================
-# ملف: stock_analyzer_final.py
-# الإصدار النهائي المتكامل: نظام متعدد الخيوط + رادار + تنبيهات
+# ملف: app_final.py
+# المحلل المصري Pro - الإصدار النهائي المتكامل
 # ============================================================
 
 import streamlit as st
@@ -10,12 +10,9 @@ import numpy as np
 import pandas_ta as ta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime
-from streamlit_autorefresh import st_autorefresh
+from datetime import datetime, timedelta
 import warnings
-import threading
-import queue
-import time
+from streamlit_autorefresh import st_autorefresh
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -26,298 +23,222 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 st.set_page_config(
-    page_title="المحلل المصري Pro - النظام المتكامل",
+    page_title="المحلل المصري Pro - الإصدار النهائي",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# تحديث تلقائي كل 60 ثانية
+st_autorefresh(interval=60000, key="auto_refresh", debounce=True)
+
 # ============================================================
-# متغيرات عامة وإعدادات
+# التصميم المتقدم
 # ============================================================
 
-# قائمة الأسهم الموسعة
-STOCKS_LIST = {
-    "البنك التجاري الدولي (مصر)": "COMI.CA",
-    "طلعت مصطفى (مصر)": "TMGH.CA",
-    "فوري (مصر)": "FWRY.CA",
-    "أرامكو (السعودية)": "2222.SR",
-    "الراجحي (السعودية)": "1120.SR",
-    "آبل (أمريكا)": "AAPL",
-    "تسلا (أمريكا)": "TSLA",
-    "مايكروسوفت (أمريكا)": "MSFT",
-    "إنفيديا (أمريكا)": "NVDA",
-    "أمازون (أمريكا)": "AMZN",
-    "جوجل (أمريكا)": "GOOGL",
-    "ميتا (أمريكا)": "META"
+st.markdown("""
+<style>
+/* الخلفية الرئيسية */
+.stApp {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
 }
 
-# إعدادات التنبيهات (ضع التوكن الحقيقي هنا)
-TELEGRAM_BOT_TOKEN = ""  # أدخل توكن البوت هنا
-TELEGRAM_CHAT_ID = ""     # أدخل معرف المحادثة هنا
+/* بطاقات المؤشرات */
+[data-testid="stMetric"] {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid #3b82f6;
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
 
-# قائمة التنبيهات
-alerts_queue = queue.Queue()
+/* أزرار */
+.stButton > button {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    border-radius: 10px;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.stButton > button:hover {
+    transform: scale(1.02);
+    box-shadow: 0 5px 15px rgba(37,99,235,0.4);
+}
+
+/* تبويبات */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+}
+.stTabs [data-baseweb="tab"] {
+    background: #1e293b;
+    border-radius: 10px 10px 0 0;
+    padding: 10px 20px;
+    font-weight: bold;
+}
+.stTabs [aria-selected="true"] {
+    background: #2563eb;
+    color: white;
+}
+
+/* شريط جانبي */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f172a, #1e293b);
+    border-right: 1px solid #3b82f6;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# دوال التنبيه والإشعارات
+# قائمة الأسهم الموسعة
 # ============================================================
 
-def send_telegram_alert(message):
-    """إرسال تنبيه عبر تيليجرام"""
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            payload = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": message,
-                "parse_mode": "HTML"
-            }
-            response = requests.post(url, json=payload, timeout=5)
-            return response.status_code == 200
-        except Exception as e:
-            print(f"خطأ في إرسال التنبيه: {e}")
-            return False
-    return False
-
-def add_alert(ticker, alert_type, price, message):
-    """إضافة تنبيه إلى قائمة الانتظار"""
-    alert = {
-        "ticker": ticker,
-        "type": alert_type,
-        "price": price,
-        "message": message,
-        "timestamp": datetime.now()
-    }
-    alerts_queue.put(alert)
-    
-    # إرسال التنبيه فوراً
-    send_telegram_alert(f"🔔 <b>تنبيه جديد</b>\n{message}\nالسهم: {ticker}\nالسعر: {price}\nالوقت: {datetime.now().strftime('%H:%M:%S')}")
+STOCKS_DB = {
+    "🏦 البنك التجاري الدولي (مصر)": "COMI.CA",
+    "🏗️ طلعت مصطفى (مصر)": "TMGH.CA",
+    "💳 فوري (مصر)": "FWRY.CA",
+    "🛢️ أرامكو (السعودية)": "2222.SR",
+    "🏦 الراجحي (السعودية)": "1120.SR",
+    "🍎 آبل (أمريكا)": "AAPL",
+    "🚀 تسلا (أمريكا)": "TSLA",
+    "💻 مايكروسوفت (أمريكا)": "MSFT",
+    "🎮 إنفيديا (أمريكا)": "NVDA",
+    "📦 أمازون (أمريكا)": "AMZN",
+    "🔍 جوجل (أمريكا)": "GOOGL",
+    "📘 ميتا (أمريكا)": "META"
+}
 
 # ============================================================
 # دوال التحليل المتقدمة
 # ============================================================
 
-def is_bottom_breakout(df):
-    """يكتشف إذا كان السهم يبدأ الصعود من القاع"""
-    if len(df) < 50:
-        return False
-    
-    try:
-        # شرط 1: السعر كان تحت المتوسط المتحرك 50 لفترة طويلة
-        was_down = df['Close'].iloc[-10] < df['MA50'].iloc[-10]
-        # شرط 2: السعر الآن اخترق المتوسط 20 للأعلى
-        breaking_up = df['Close'].iloc[-1] > df['MA20'].iloc[-1]
-        # شرط 3: RSI بدأ يخرج من منطقة ذروة البيع (أكبر من 30)
-        rsi_rising = 30 < df['RSI'].iloc[-1] < 50
-        
-        return was_down and breaking_up and rsi_rising
-    except:
-        return False
-
-def detect_bottom_growth(df):
-    """اكتشاف نمو السهم من القاع (إشارة الانفراج)"""
-    if len(df) < 50:
-        return False
-    
-    try:
-        # شرط 1: السعر في قاع أو قريب منه
-        lowest_50 = df['Low'].rolling(window=50).min().iloc[-1]
-        is_at_low = df['Close'].iloc[-1] <= lowest_50 * 1.05
-        
-        # شرط 2: مؤشر RSI بدأ يصعد
-        rsi_rising = df['RSI'].iloc[-1] > df['RSI'].iloc[-3]
-        
-        # شرط 3: اختراق المتوسط 10
-        ma10 = df['Close'].rolling(window=10).mean()
-        confirmed = df['Close'].iloc[-1] > ma10.iloc[-1]
-        
-        return is_at_low and rsi_rising and confirmed
-    except:
-        return False
-
-def get_exit_signals(df):
-    """تحديد إشارات البيع ووقف الخسارة"""
-    if len(df) < 2:
-        return False, 0
-    
-    last_price = df['Close'].iloc[-1]
-    stop_loss = df['Low'].iloc[-2] * 0.97 if len(df) > 1 else last_price * 0.97
-    exit_signal = last_price < stop_loss or last_price < df['MA20'].iloc[-1]
-    
-    return exit_signal, stop_loss
-
-def get_trading_orders(df):
-    """توليد أوامر بيع وشراء محددة"""
-    if len(df) < 20:
-        return "قيد التحليل", 0, 0
-    
-    current_price = df['Close'].iloc[-1]
-    stop_loss = df['Low'].tail(2).min() * 0.98
-    target = df['High'].rolling(window=20).max().iloc[-1]
-    
-    if current_price < stop_loss:
-        return "❌ أمر بيع فوري (كسر وقف الخسارة)", stop_loss, target
-    elif current_price >= target:
-        return "💰 أمر بيع (تحقيق هدف)", stop_loss, target
-    else:
-        return "⏳ احتفاظ", stop_loss, target
-
-def calculate_smart_score(df):
-    """حساب درجة ذكية مع أوزان مختلفة لكل مؤشر"""
-    if df.empty or len(df) < 20:
-        return 0, [], {}
-    
-    score = 0
-    reasons = []
-    details = {}
-    last = df.iloc[-1]
-    
-    # 1. الاتجاه العام
-    if last['Close'] > last['MA20']:
-        score += 1.0
-        reasons.append("✅ السعر فوق المتوسط 20")
-        details['trend'] = 'up'
-    else:
-        reasons.append("⚠️ السعر تحت المتوسط 20")
-        details['trend'] = 'down'
-        score -= 0.5
-    
-    # 2. RSI
-    rsi = last['RSI']
-    details['rsi'] = round(rsi, 1)
-    
-    if rsi <= 30:
-        score += 1.5
-        reasons.append(f"🔥 فرصة شراء - RSI {rsi:.1f}")
-    elif 30 < rsi <= 40:
-        score += 1.0
-        reasons.append(f"✅ منطقة شراء - RSI {rsi:.1f}")
-    elif 40 < rsi < 55:
-        score += 0.5
-        reasons.append(f"✅ منطقة تجميع - RSI {rsi:.1f}")
-    elif rsi >= 70:
-        score -= 1.0
-        reasons.append(f"⚠️ ذروة شراء - RSI {rsi:.1f}")
-    
-    # 3. MACD
-    if 'MACD_12_26_9' in last and 'MACDs_12_26_9' in last:
-        if last['MACD_12_26_9'] > last['MACDs_12_26_9']:
-            score += 1.0
-            reasons.append("🚀 MACD إيجابي")
-            details['macd'] = 'bullish'
-        else:
-            score -= 0.5
-            reasons.append("📉 MACD سلبي")
-            details['macd'] = 'bearish'
-    
-    # 4. حجم التداول
-    vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
-    if last['Volume'] > vol_ma:
-        score += 0.5
-        reasons.append("💰 سيولة عالية")
-    
-    return round(score, 1), reasons, details
-
-# ============================================================
-# دوال جلب البيانات (متعددة الخيوط)
-# ============================================================
-
-def fetch_single_stock(ticker, name):
-    """جلب بيانات سهم واحد (للاستخدام مع الـ Threading)"""
+@st.cache_data(ttl=60, show_spinner=False)
+def get_stock_data(ticker):
+    """جلب بيانات السهم مع جميع المؤشرات"""
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period="6mo", interval="1d")
         
-        if df.empty or len(df) < 20:
-            return None
+        # جلب بيانات 3 أشهر للتحليل
+        df = stock.history(period="3mo", interval="1d")
         
-        # حساب المؤشرات الأساسية
+        if df.empty or len(df) < 10:
+            return None, None
+        
+        # حساب جميع المؤشرات الفنية
         df['RSI'] = ta.rsi(df['Close'], length=14)
         df['MA20'] = ta.sma(df['Close'], length=20)
         df['MA50'] = ta.sma(df['Close'], length=50)
+        
+        # Bollinger Bands
+        bb = ta.bbands(df['Close'], length=20, std=2)
+        if bb is not None:
+            df = pd.concat([df, bb], axis=1)
         
         # MACD
         macd = ta.macd(df['Close'])
         if macd is not None:
             df = pd.concat([df, macd], axis=1)
         
-        # حجم التداول المتوسط
-        df['Volume_MA20'] = df['Volume'].rolling(window=20).mean()
+        # حجم التداول
+        df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
         
-        return {
-            'name': name,
-            'ticker': ticker,
-            'df': df,
-            'current_price': df['Close'].iloc[-1],
-            'volume': df['Volume'].iloc[-1],
-            'rsi': df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
-        }
-    except Exception as e:
-        return None
-
-def fetch_all_stocks_multithreaded(stock_list, max_workers=5):
-    """جلب بيانات جميع الأسهم باستخدام تعدد الخيوط"""
-    results = []
-    
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {}
-        for name, ticker in stock_list.items():
-            future = executor.submit(fetch_single_stock, ticker, name)
-            futures[future] = name
-        
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                results.append(result)
-    
-    return results
-
-@st.cache_data(ttl=900, show_spinner=False)
-def get_full_data(ticker):
-    """جلب البيانات الكاملة لسهم واحد"""
-    try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period="1y", interval="1d")
-        
-        if df.empty or len(df) < 20:
-            return None, None
-        
-        df['RSI'] = ta.rsi(df['Close'], length=14)
-        df['MA20'] = ta.sma(df['Close'], length=20)
-        df['MA50'] = ta.sma(df['Close'], length=50)
-        df['MA200'] = ta.sma(df['Close'], length=200)
-        
-        bb = ta.bbands(df['Close'], length=20, std=2)
-        if bb is not None:
-            df = pd.concat([df, bb], axis=1)
-        
-        macd = ta.macd(df['Close'])
-        if macd is not None:
-            df = pd.concat([df, macd], axis=1)
-        
-        df['Volume_MA20'] = df['Volume'].rolling(window=20).mean()
+        # حساب الدعم والمقاومة
+        df['Support'] = df['Low'].rolling(window=20).min()
+        df['Resistance'] = df['High'].rolling(window=20).max()
         
         return df, stock.info
         
     except Exception as e:
+        st.error(f"خطأ: {str(e)}")
         return None, None
 
+def calculate_score(df):
+    """حساب درجة الثقة المتقدمة"""
+    if df.empty or len(df) < 20:
+        return 0, []
+    
+    score = 0
+    signals = []
+    last = df.iloc[-1]
+    
+    # 1. الاتجاه (وزن 2)
+    if last['Close'] > last['MA50']:
+        score += 2
+        signals.append("✅ الاتجاه العام صاعد")
+    else:
+        signals.append("⚠️ الاتجاه العام هابط")
+        score -= 1
+    
+    # 2. الزخم (وزن 1.5)
+    if last['RSI'] < 30:
+        score += 1.5
+        signals.append(f"🔥 منطقة ذروة بيع - RSI: {last['RSI']:.1f}")
+    elif last['RSI'] > 70:
+        score -= 1
+        signals.append(f"⚠️ منطقة ذروة شراء - RSI: {last['RSI']:.1f}")
+    else:
+        score += 0.5
+        signals.append(f"✅ RSI طبيعي - {last['RSI']:.1f}")
+    
+    # 3. MACD
+    if 'MACD_12_26_9' in last and 'MACDs_12_26_9' in last:
+        if last['MACD_12_26_9'] > last['MACDs_12_26_9']:
+            score += 1
+            signals.append("🚀 MACD إيجابي")
+        else:
+            signals.append("📉 MACD سلبي")
+            score -= 0.5
+    
+    # 4. الحجم
+    vol_ratio = last['Volume'] / last['Volume_MA'] if last['Volume_MA'] > 0 else 1
+    if vol_ratio > 1.5:
+        score += 1
+        signals.append(f"💰 سيولة عالية ({vol_ratio:.1f}x)")
+    elif vol_ratio < 0.5:
+        score -= 0.5
+        signals.append(f"📉 سيولة ضعيفة")
+    
+    return min(max(score, 0), 5), signals
+
+def get_trading_decision(df, score):
+    """تحديد قرار التداول"""
+    if df.empty:
+        return "لا توجد بيانات", "#gray", "⏸️"
+    
+    last = df.iloc[-1]
+    rsi = last['RSI'] if not pd.isna(last['RSI']) else 50
+    
+    # قرار الشراء القوي
+    if score >= 4 or (rsi < 35 and last['Close'] > last['MA20']):
+        return "شراء قوي", "#10b981", "🟢"
+    # قرار شراء محتمل
+    elif score >= 3 or (40 < rsi < 50):
+        return "شراء محتمل", "#3b82f6", "📈"
+    # قرار مراقبة
+    elif score >= 2:
+        return "مراقبة", "#f59e0b", "🟡"
+    # قرار بيع
+    elif rsi > 75:
+        return "بيع/تصريف", "#ef4444", "🔴"
+    else:
+        return "احتفاظ", "#94a3b8", "⚪"
+
 # ============================================================
-# دوال الرسم البياني المتقدم مع المستهدفات
+# دوال الرسم البياني
 # ============================================================
 
-def create_chart_with_targets(df, ticker, stop_loss, target):
-    """رسم بياني مع خطوط المستهدفات ووقف الخسارة"""
+def create_advanced_chart(df, ticker, target_price, stop_loss):
+    """رسم بياني متقدم مع المستهدفات"""
     
     fig = make_subplots(
-        rows=3, cols=1,
+        rows=4, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
-        row_heights=[0.6, 0.2, 0.2],
-        subplot_titles=("📈 السعر مع المستهدفات", "📊 RSI", "💰 حجم التداول")
+        row_heights=[0.45, 0.2, 0.2, 0.15],
+        subplot_titles=("📈 السعر مع المتوسطات والمستهدفات", "📊 مؤشر RSI", "⚡ مؤشر MACD", "💰 حجم التداول")
     )
     
+    # ===== الرسم الرئيسي =====
     # الشموع اليابانية
     fig.add_trace(
         go.Candlestick(
@@ -329,286 +250,337 @@ def create_chart_with_targets(df, ticker, stop_loss, target):
     
     # المتوسطات المتحركة
     fig.add_trace(
-        go.Scatter(x=df.index, y=df['MA20'], name="MA 20", line=dict(color='#f59e0b')),
+        go.Scatter(x=df.index, y=df['MA20'], name="MA 20", 
+                   line=dict(color='#f59e0b', width=1.5)),
         row=1, col=1
     )
     fig.add_trace(
-        go.Scatter(x=df.index, y=df['MA50'], name="MA 50", line=dict(color='#10b981')),
+        go.Scatter(x=df.index, y=df['MA50'], name="MA 50", 
+                   line=dict(color='#10b981', width=1.5)),
         row=1, col=1
     )
     
-    # خط الهدف
-    if target > 0:
-        fig.add_hline(
-            y=target, line_dash="dash", line_color="#10b981",
-            annotation_text=f"🎯 الهدف: {target:.2f}", annotation_position="top right",
+    # Bollinger Bands
+    if 'BBU_20_2.0' in df.columns:
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df['BBU_20_2.0'], name="BB علوي",
+                       line=dict(color='#94a3b8', dash='dash')),
             row=1, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df['BBL_20_2.0'], name="BB سفلي",
+                       line=dict(color='#94a3b8', dash='dash'),
+                       fill='tonexty', fillcolor='rgba(148,163,184,0.1)'),
+            row=1, col=1
+        )
+    
+    # خط الهدف
+    if target_price > 0:
+        fig.add_hline(
+            y=target_price, line_dash="dash", line_color="#10b981",
+            annotation_text=f"🎯 الهدف: {target_price:.2f}",
+            annotation_position="top right", row=1, col=1
         )
     
     # خط وقف الخسارة
     if stop_loss > 0:
         fig.add_hline(
             y=stop_loss, line_dash="dash", line_color="#ef4444",
-            annotation_text=f"🛑 وقف الخسارة: {stop_loss:.2f}", annotation_position="bottom right",
-            row=1, col=1
+            annotation_text=f"🛑 وقف خسارة: {stop_loss:.2f}",
+            annotation_position="bottom right", row=1, col=1
         )
     
-    # RSI
+    # ===== RSI =====
     fig.add_trace(
-        go.Scatter(x=df.index, y=df['RSI'], name="RSI", line=dict(color='#8b5cf6')),
+        go.Scatter(x=df.index, y=df['RSI'], name="RSI",
+                   line=dict(color='#8b5cf6', width=2)),
         row=2, col=1
     )
     fig.add_hrect(y0=70, y1=100, fillcolor="#ef4444", opacity=0.2, row=2, col=1)
     fig.add_hrect(y0=0, y1=30, fillcolor="#10b981", opacity=0.2, row=2, col=1)
+    fig.add_hline(y=50, line_dash="dash", line_color="#94a3b8", row=2, col=1)
     
-    # حجم التداول
-    volume_colors = ['#ef4444' if df['Close'].iloc[i] < df['Open'].iloc[i] else '#10b981' 
-                     for i in range(len(df))]
+    # ===== MACD =====
+    if 'MACD_12_26_9' in df.columns:
+        macd_hist = df['MACD_12_26_9'] - df['MACDs_12_26_9']
+        colors = ['#10b981' if v >= 0 else '#ef4444' for v in macd_hist]
+        
+        fig.add_trace(
+            go.Bar(x=df.index, y=macd_hist, name="Histogram",
+                   marker_color=colors, opacity=0.7),
+            row=3, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df['MACD_12_26_9'], name="MACD",
+                       line=dict(color='#3b82f6', width=2)),
+            row=3, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df['MACDs_12_26_9'], name="Signal",
+                       line=dict(color='#f59e0b', width=2)),
+            row=3, col=1
+        )
+    
+    # ===== حجم التداول =====
+    colors_vol = ['#ef4444' if df['Close'].iloc[i] < df['Open'].iloc[i] else '#10b981' 
+                  for i in range(len(df))]
     fig.add_trace(
-        go.Bar(x=df.index, y=df['Volume'], name="الحجم", marker_color=volume_colors),
-        row=3, col=1
+        go.Bar(x=df.index, y=df['Volume'], name="الحجم",
+               marker_color=colors_vol, opacity=0.7),
+        row=4, col=1
+    )
+    fig.add_trace(
+        go.Scatter(x=df.index, y=df['Volume_MA'], name="المتوسط",
+                   line=dict(color='#3b82f6', dash='dash')),
+        row=4, col=1
     )
     
+    # تنسيق الرسم
     fig.update_layout(
         title=f"📊 التحليل الفني لسهم {ticker}",
         template="plotly_dark",
-        height=700,
+        height=800,
         margin=dict(l=10, r=10, t=60, b=10),
-        showlegend=True
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
     fig.update_yaxes(title_text="السعر", row=1, col=1)
     fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100])
-    fig.update_yaxes(title_text="الحجم", row=3, col=1)
+    fig.update_yaxes(title_text="MACD", row=3, col=1)
+    fig.update_yaxes(title_text="الحجم", row=4, col=1)
     
     return fig
 
 # ============================================================
-# دالة الماسح الضوئي للسوق (Stock Scanner)
+# ماسح السوق (Market Scanner)
 # ============================================================
 
-def market_scanner(stock_list):
-    """الماسح الضوئي للسوق - يكتشف فرص الشراء والبيع"""
-    opportunities = []
-    stocks_data = fetch_all_stocks_multithreaded(stock_list)
+def scan_all_stocks():
+    """مسح جميع الأسهم للبحث عن فرص"""
+    results = []
     
-    for stock in stocks_data:
-        if stock is None:
-            continue
-        
-        df = stock['df']
-        score, _, details = calculate_smart_score(df)
-        bottom_breakout = is_bottom_breakout(df)
-        bottom_growth = detect_bottom_growth(df)
-        exit_signal, stop_loss = get_exit_signals(df)
-        
-        # تحديد فرص الشراء القوية
-        if score >= 3.5 or bottom_breakout or bottom_growth:
-            opportunities.append({
-                "السهم": stock['name'],
-                "الرمز": stock['ticker'],
-                "السعر": round(stock['current_price'], 2),
-                "RSI": round(stock['rsi'], 1),
-                "درجة الثقة": score,
-                "نوع الإشارة": "🟢 شراء قوي" if bottom_breakout else ("🟢 انفراج قاع" if bottom_growth else ("🟢 شراء" if score >= 3.5 else "🟡 مراقبة")),
-                "الهدف المقترح": round(stock['current_price'] * 1.1, 2)
-            })
-        
-        # اكتشاف إشارات البيع
-        if exit_signal:
-            add_alert(stock['ticker'], "SELL", stock['current_price'], 
-                     f"⚠️ إشارة بيع للسهم {stock['name']} عند سعر {stock['current_price']:.2f}")
-            
-            opportunities.append({
-                "السهم": stock['name'],
-                "الرمز": stock['ticker'],
-                "السعر": round(stock['current_price'], 2),
-                "RSI": round(stock['rsi'], 1),
-                "درجة الثقة": score,
-                "نوع الإشارة": "🔴 بيع/خروج",
-                "الهدف المقترح": round(stop_loss, 2) if stop_loss else 0
-            })
+    with st.spinner("🔄 جاري مسح جميع الأسهم..."):
+        for name, ticker in STOCKS_DB.items():
+            df, _ = get_stock_data(ticker)
+            if df is not None:
+                score, _ = calculate_score(df)
+                last_price = df['Close'].iloc[-1]
+                rsi = df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
+                
+                # تحديد مستوى الفرصة
+                if score >= 4:
+                    signal = "🟢 فرصة شراء قوية"
+                elif score >= 3:
+                    signal = "📈 فرصة شراء"
+                elif score <= 1.5:
+                    signal = "🔴 إشارة بيع"
+                else:
+                    signal = "🟡 مراقبة"
+                
+                results.append({
+                    "السهم": name.split(" ")[1] if len(name.split(" ")) > 1 else name,
+                    "الرمز": ticker,
+                    "السعر": round(last_price, 2),
+                    "RSI": round(rsi, 1),
+                    "الدرجة": score,
+                    "الإشارة": signal
+                })
     
-    return pd.DataFrame(opportunities)
+    return pd.DataFrame(results)
 
 # ============================================================
 # الواجهة الرئيسية
 # ============================================================
 
 def main():
-    """الدالة الرئيسية"""
-    
-    # التحديث التلقائي
-    st_autorefresh(interval=900000, key="auto_refresh")
-    
-    # تصميم الشريط الجانبي
+    # شريط جانبي
     with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="font-size: 24px; color: #2563eb;">📊 المحلل المصري Pro</h1>
-            <p style="color: #94a3b8;">النظام المتكامل - إصدار المؤسسات</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("## 📊 المحلل المصري Pro")
         st.markdown("---")
         
         # اختيار السهم
-        selected_stock = st.selectbox("🔍 اختيار سهم", list(STOCKS_LIST.keys()))
-        ticker = STOCKS_LIST[selected_stock]
+        st.markdown("### 🔍 اختيار السهم")
+        selected = st.selectbox("", list(STOCKS_DB.keys()), label_visibility="collapsed")
+        ticker = STOCKS_DB[selected]
         
         st.markdown("---")
         
-        # أزرار التحكم
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 تحديث", use_container_width=True):
-                st.cache_data.clear()
-                st.rerun()
-        with col2:
-            if st.button("📊 مسح السوق", use_container_width=True):
-                st.session_state['run_scanner'] = True
+        # إحصائيات سريعة
+        st.markdown("### 📈 معلومات")
+        st.caption(f"🕐 آخر تحديث: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"🔄 تحديث تلقائي كل 60 ثانية")
+        st.caption(f"📊 مصدر: Yahoo Finance")
         
         st.markdown("---")
         
-        # إعدادات التنبيهات
-        with st.expander("⚙️ إعدادات التنبيهات", expanded=False):
-            st.info("""
-            لتفعيل تنبيهات التيليجرام:
-            1. أنشئ بوت عبر @BotFather
-            2. احصل على التوكن
-            3. احصل على Chat ID
-            4. أضفهم في الكود
-            """)
+        # زر التحديث اليدوي
+        if st.button("🔄 تحديث يدوي", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
     
-    # العنوان الرئيسي
-    st.markdown(f'<h2 style="text-align: center;">📈 التحليل المتكامل لسهم {ticker}</h2>', 
-                unsafe_allow_html=True)
+    # عنوان رئيسي
+    st.markdown(f"## 📈 التحليل المتكامل لسهم {selected}")
     st.markdown("---")
     
     # جلب البيانات
-    with st.spinner("🔄 جاري تحليل البيانات..."):
-        df, info = get_full_data(ticker)
+    df, info = get_stock_data(ticker)
     
     if df is not None and not df.empty:
         # حساب المؤشرات
-        score, reasons, details = calculate_smart_score(df)
-        exit_signal, stop_loss = get_exit_signals(df)
-        order_text, order_stop, order_target = get_trading_orders(df)
-        bottom_breakout = is_bottom_breakout(df)
-        bottom_growth = detect_bottom_growth(df)
+        score, signals = calculate_score(df)
         
-        # بطاقات المعلومات السريعة
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
+        # البيانات الأساسية
         current_price = df['Close'].iloc[-1]
         prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
         price_change = ((current_price - prev_price) / prev_price) * 100
         
+        # حساب الهدف ووقف الخسارة
+        target_price = df['Resistance'].iloc[-1] if not pd.isna(df['Resistance'].iloc[-1]) else current_price * 1.05
+        stop_loss = df['Support'].iloc[-1] if not pd.isna(df['Support'].iloc[-1]) else current_price * 0.97
+        
+        # قرار التداول
+        decision, decision_color, decision_icon = get_trading_decision(df, score)
+        
+        # ===== بطاقات المعلومات =====
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
         with col1:
-            st.metric("💰 السعر", f"{current_price:.2f}", f"{price_change:+.2f}%")
+            delta = f"{price_change:+.2f}%"
+            st.metric("💰 السعر", f"{current_price:.2f}", delta)
+        
         with col2:
-            st.metric("📊 RSI", f"{details.get('rsi', 50):.1f}")
+            rsi = df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
+            st.metric("📊 RSI", f"{rsi:.1f}")
+        
         with col3:
             st.metric("🎯 درجة الثقة", f"{score}/5")
+        
         with col4:
-            detection = "🟢 قاع" if bottom_breakout else ("🟢 انفراج" if bottom_growth else "🟡 عادي")
-            st.metric("🔍 الاكتشاف", detection)
+            st.metric("📋 القرار", decision)
+        
         with col5:
-            st.metric("📋 الأمر", order_text.split()[0])
+            st.metric("🎯 الهدف", f"{target_price:.2f}")
         
         st.markdown("---")
         
-        # إشارات خاصة
-        if bottom_breakout:
-            st.success("🎉 **اكتشاف: السهم يبدأ الصعود من القاع!** فرصة شراء مبكرة")
-        elif bottom_growth:
-            st.info("📈 **اكتشاف: نمو من القاع - إشارة انفراج إيجابية**")
+        # ===== بطاقة القرار =====
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
+                    border: 2px solid {decision_color};
+                    border-radius: 20px; padding: 20px;
+                    text-align: center; margin: 15px 0;">
+            <h2 style="color: {decision_color}; margin: 0;">
+                {decision_icon} {decision} {decision_icon}
+            </h2>
+            <p style="color: #94a3b8; margin: 10px 0 0 0;">
+                🛑 وقف الخسارة: {stop_loss:.2f} | 🎯 الهدف: {target_price:.2f}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # رسالة وقف الخسارة
-        if exit_signal:
-            st.error(f"⚠️ **تنبيه: إشارة بيع/خروج!** وقف الخسارة عند {stop_loss:.2f}")
-            add_alert(ticker, "EXIT", current_price, f"إشارة خروج للسهم {ticker} عند {current_price:.2f}")
-        
-        # التبويبات
-        tab1, tab2, tab3, tab4 = st.tabs(["📈 الرسم البياني", "📋 التحليل", "🎯 الأوامر", "🏢 معلومات"])
+        # ===== التبويبات =====
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📈 الرسم البياني", "📋 التحليل الفني", "🔍 ماسح السوق", "🏢 معلومات الشركة"
+        ])
         
         with tab1:
-            fig = create_chart_with_targets(df, ticker, order_stop, order_target)
+            fig = create_advanced_chart(df, ticker, target_price, stop_loss)
             st.plotly_chart(fig, use_container_width=True, key="main_chart")
         
         with tab2:
             st.subheader("📋 تفاصيل التحليل الفني")
-            for reason in reasons:
-                st.markdown(reason)
+            
+            # عرض الإشارات
+            for signal in signals:
+                if "✅" in signal or "🚀" in signal:
+                    st.success(signal)
+                elif "⚠️" in signal or "⚠" in signal:
+                    st.warning(signal)
+                else:
+                    st.info(signal)
             
             st.markdown("---")
-            st.subheader("🔍 اكتشافات إضافية")
-            st.markdown(f"- **كسر القاع:** {'✅ نعم' if bottom_breakout else '❌ لا'}")
-            st.markdown(f"- **انفراج القاع:** {'✅ نعم' if bottom_growth else '❌ لا'}")
-            st.markdown(f"- **إشارة خروج:** {'⚠️ نعم' if exit_signal else '✅ لا'}")
+            
+            # جدول المؤشرات
+            st.subheader("📊 المؤشرات الحالية")
+            last = df.iloc[-1]
+            indicators = {
+                "المؤشر": ["السعر", "المتوسط 20", "المتوسط 50", "RSI", "المقاومة", "الدعم"],
+                "القيمة": [
+                    f"{last['Close']:.2f}",
+                    f"{last['MA20']:.2f}",
+                    f"{last['MA50']:.2f}",
+                    f"{last['RSI']:.1f}",
+                    f"{last['Resistance']:.2f}",
+                    f"{last['Support']:.2f}"
+                ]
+            }
+            st.dataframe(pd.DataFrame(indicators), use_container_width=True, hide_index=True)
         
         with tab3:
-            st.subheader("🎯 أوامر التداول المقترحة")
+            st.subheader("🔍 ماسح السوق الذكي")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**📊 الأمر الحالي:** {order_text}")
-                st.markdown(f"**🛑 وقف الخسارة:** {order_stop:.2f}")
-            with col2:
-                st.markdown(f"**🎯 الهدف الأول:** {order_target:.2f}")
-                st.markdown(f"**📈 نسبة المخاطرة:** {((order_target - current_price) / (current_price - order_stop)):.2f}" if order_stop < current_price else "غير متاح")
+            if st.button("🚀 تشغيل الماسح الضوئي", use_container_width=True):
+                results_df = scan_all_stocks()
+                if not results_df.empty:
+                    st.success(f"✅ تم العثور على {len(results_df)} فرصة")
+                    st.dataframe(results_df, use_container_width=True, hide_index=True)
+                    
+                    # عرض أفضل 3 فرص
+                    st.subheader("🏆 أفضل الفرص حالياً")
+                    top_opportunities = results_df[results_df['الإشارة'].str.contains("شراء")].head(3)
+                    if not top_opportunities.empty:
+                        for _, row in top_opportunities.iterrows():
+                            st.info(f"📈 {row['السهم']} - {row['الإشارة']} | السعر: {row['السعر']} | RSI: {row['RSI']}")
+                    else:
+                        st.info("لا توجد فرص شراء قوية حالياً")
+                else:
+                    st.warning("⚠️ لا توجد بيانات كافية للمسح")
         
         with tab4:
             if info:
-                st.markdown(f"**🏢 الاسم:** {info.get('longName', 'غير متوفر')}")
-                st.markdown(f"**🏭 القطاع:** {info.get('sector', 'غير متوفر')}")
-                st.markdown(f"**💰 القيمة السوقية:** ${info.get('marketCap', 0):,}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**🏢 الاسم:** {info.get('longName', 'غير متوفر')}")
+                    st.markdown(f"**🏭 القطاع:** {info.get('sector', 'غير متوفر')}")
+                    st.markdown(f"**📋 الصناعة:** {info.get('industry', 'غير متوفر')}")
+                    st.markdown(f"**🌍 الدولة:** {info.get('country', 'غير متوفر')}")
+                with col2:
+                    if info.get('marketCap'):
+                        st.markdown(f"**💰 القيمة السوقية:** ${info.get('marketCap', 0):,}")
+                    if info.get('trailingPE'):
+                        st.markdown(f"**📊 مكرر الأرباح:** {info.get('trailingPE', 'غير متوفر')}")
+                    if info.get('dividendYield'):
+                        st.markdown(f"**💵 عائد التوزيعات:** {info.get('dividendYield', 0)*100:.2f}%")
+                
                 if info.get('longBusinessSummary'):
-                    st.markdown("**📝 نبذة:**")
+                    st.markdown("---")
+                    st.markdown("**📝 نبذة عن الشركة:**")
                     st.markdown(info.get('longBusinessSummary')[:500] + "...")
-        
+            else:
+                st.info("معلومات الشركة غير متوفرة حالياً")
+    
     else:
         st.error("❌ فشل في جلب البيانات")
-    
-    st.markdown("---")
-    
-    # ===== ماسح السوق (Stock Scanner) =====
-    st.subheader("🔍 ماسح السوق الذكي - فرص الاستثمار")
-    
-    if st.button("🔄 تشغيل الماسح الضوئي للسوق", use_container_width=True):
-        with st.spinner("🔄 جاري مسح جميع الأسهم (باستخدام تقنية تعدد الخيوط)..."):
-            opportunities_df = market_scanner(STOCKS_LIST)
-            
-            if not opportunities_df.empty:
-                st.success(f"✅ تم العثور على {len(opportunities_df)} فرصة")
-                st.dataframe(opportunities_df, use_container_width=True, hide_index=True)
-                
-                # عرض التنبيهات
-                if not alerts_queue.empty():
-                    st.subheader("🔔 التنبيهات المرسلة")
-                    while not alerts_queue.empty():
-                        alert = alerts_queue.get()
-                        st.info(f"📢 {alert['message']} - {alert['timestamp'].strftime('%H:%M:%S')}")
-            else:
-                st.warning("⚠️ لم يتم العثور على فرص استثمارية حالياً")
-    
-    # عرض قائمة التنبيهات الحالية
-    if not alerts_queue.empty():
-        with st.expander("🔔 سجل التنبيهات", expanded=False):
-            while not alerts_queue.empty():
-                alert = alerts_queue.get()
-                st.warning(f"{alert['timestamp'].strftime('%H:%M:%S')} - {alert['message']}")
+        st.markdown("""
+        <div style="text-align: center; padding: 20px;">
+            <p>⚠️ تأكد من:</p>
+            <ul style="text-align: right;">
+                <li>صحة رمز السهم</li>
+                <li>اتصال الإنترنت</li>
+                <li>إعادة المحاولة بعد دقيقة</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
     
     # تذييل
     st.markdown("---")
     st.caption("""
-    ⚠️ **تنويه مهم:** هذا التحليل لأغراض تعليمية فقط. 
-    نظام متعدد الخيوط | تنبيهات فورية | ماسح سوق ذكي | إصدار المؤسسات
+    ⚠️ **تنويه:** هذا التحليل لأغراض تعليمية فقط.
+    🔄 يتم تحديث البيانات تلقائياً كل 60 ثانية.
+    📊 البيانات مقدمة من Yahoo Finance.
     """)
-
-# ============================================================
-# تشغيل التطبيق
-# ============================================================
 
 if __name__ == "__main__":
     main()
