@@ -13,3 +13,8 @@ streamlit run app.py
 # استخدام Docker
 docker-compose up -d
 streamlit run app_ai_engine.py
+# تثبيت المكتبات الإضافية
+pip install prophet tensorflow scikit-learn scipy
+
+# تشغيل التطبيق
+streamlit run app_ai_monster.py
