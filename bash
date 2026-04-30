@@ -12,3 +12,4 @@ python run_local_scanner.py
 streamlit run app.py
 # استخدام Docker
 docker-compose up -d
+streamlit run app_ai_engine.py
