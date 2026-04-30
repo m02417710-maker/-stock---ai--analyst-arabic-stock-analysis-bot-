@@ -5,3 +5,8 @@ pip install streamlit yfinance pandas pandas-ta plotly streamlit-autorefresh req
 
 # تشغيل التطبيق
 streamlit run stock_analyzer_final.py
+# تشغيل الماسح في الخلفية
+python run_local_scanner.py
+
+# وفي نافذة أخرى تشغيل الواجهة
+streamlit run app.py
