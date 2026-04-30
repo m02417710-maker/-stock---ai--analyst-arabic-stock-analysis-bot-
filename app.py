@@ -794,3 +794,4 @@ def main():
         fig2.add_trace(
             go.Scatter(x=df.index, y=df['RSI'], name="RSI", line=dict(color='#8b5cf6')),
             row=
+        )
