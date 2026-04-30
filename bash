@@ -19,3 +19,5 @@ pip install prophet tensorflow scikit-learn scipy
 # تشغيل التطبيق
 streamlit run app_ai_monster.py
 streamlit run app_quantum_ultimate.py
+pip install yfinance pandas numpy pandas-ta plotly scikit-learn
+streamlit run app_oracle_zero_knowledge.py
