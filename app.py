@@ -329,7 +329,9 @@ if df is not None and not df.empty:
         fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100])
         fig.update_yaxes(title_text="MACD", row=3, col=1) if show_advanced else None
         
-        st.plotly_chart(fig, use_container_width=True)
+        أضف key فريد لكل رسم بياني
+st.plotly_chart(fig, use_container_width=True, key="unique_chart_01")
+
     
     with tab2:
         st.subheader("ℹ️ معلومات الشركة")
