@@ -1,42 +1,24 @@
-# ============================================================
-# ملف: .github/workflows/scanner.yml
-# جدولة التشغيل التلقائي كل 15 دقيقة
-# ============================================================
-
-name: 📊 الماسح التلقائي للأسهم
+name: Stock Scanner - Daily Update
 
 on:
   schedule:
-    # يعمل كل 15 دقيقة طوال أيام الأسبوع
-    - cron: '*/15 * * * *'
-  # يسمح بالتشغيل اليدوي من لوحة التحكم
+    - cron: '0 */6 * * *'  # كل 6 ساعات
   workflow_dispatch:
 
 jobs:
-  scan-stocks:
+  scan:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: 📥 تحميل الكود
-      uses: actions/checkout@v4
-    
-    - name: 🐍 إعداد Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    
-    - name: 📦 تثبيت المكتبات
-      run: |
-        pip install yfinance pandas pandas-ta requests
-    
-    - name: 🔍 تشغيل الماسح
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      run: |
-        python scanner.py
-    
-    - name: 📝 حفظ سجل التشغيل
-      run: |
-        echo "✅ تم تشغيل الماسح في $(date)" >> scan_log.txt
-        cat scan_log.txt
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      
+      - name: Run scanner
+        run: python -c "from app import scan_market; print(scan_market())"
