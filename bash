@@ -518,3 +518,11 @@ docker image prune
 
 # تنظيف شامل
 docker system prune -a --volumes
+# 1. بناء الصورة
+docker build -t boursagi-ai .
+
+# 2. تشغيل الحاوية
+docker run -d -p 8501:8501 --name boursagi-ai boursagi-ai
+
+# 3. فتح المتصفح
+open http://localhost:8501
