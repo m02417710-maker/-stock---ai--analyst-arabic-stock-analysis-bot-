@@ -1,3 +1,11 @@
+# إضافة الملفات الجديدة
+git add database.py core.py app.py
+
+# الالتزام
+git commit -m "Enterprise Architecture: Added database.py for 100+ stocks across EGX, TADAWUL, ADX, DFM, US markets"
+
+# الرفع
+git push origin main
 # 1. انتقل إلى مجلد المشروع (غير المسار حسب موقعك)
 cd /path/to/your/project
 
