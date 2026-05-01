@@ -1,4 +1,4 @@
-# البورصجي AI - النسخة النهائية المتكاملة (مفكرة صفقات + تنبيهات + تقارير)
+# البورصجي AI - النسخة النهائية المتكاملة (بتطابق تام مع الصور)
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,72 +10,56 @@ from pathlib import Path
 
 # 1. إعدادات الصفحة
 st.set_page_config(
-    page_title="البورصجي AI - النظام المتكامل",
+    page_title="البورصجي AI - المنصة الذكية",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. تهيئة قاعدة البيانات المحلية للمفكرة
-DATA_DIR = Path(__file__).parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
-JOURNAL_FILE = DATA_DIR / "trading_journal.json"
-
-def load_journal():
-    """تحميل صفقات المفكرة"""
-    if JOURNAL_FILE.exists():
-        with open(JOURNAL_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
-
-def save_journal(journal):
-    """حفظ صفقات المفكرة"""
-    with open(JOURNAL_FILE, 'w', encoding='utf-8') as f:
-        json.dump(journal, f, ensure_ascii=False, indent=2)
-
-def update_journal_prices(journal):
-    """تحديث أسعار الصفقات الحية"""
-    updated = []
-    for trade in journal:
-        try:
-            ticker = trade["symbol"] + ".CA" if not trade["symbol"].endswith(".CA") else trade["symbol"]
-            stock = yf.Ticker(ticker)
-            df = stock.history(period="1d")
-            if not df.empty:
-                current = df['Close'].iloc[-1]
-                trade["current_price"] = current
-                trade["profit_pct"] = ((current - trade["entry_price"]) / trade["entry_price"]) * 100
-                
-                # تحديث شريط التقدم
-                target_range = trade["target_price"] - trade["entry_price"]
-                progress = ((current - trade["entry_price"]) / target_range) * 100 if target_range > 0 else 0
-                trade["progress"] = min(100, max(0, progress))
-        except:
-            pass
-        updated.append(trade)
-    return updated
-
-# 3. CSS مخصص
+# 2. CSS المحسن للتطابق التام مع الصور
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
     
     * {
         font-family: 'Cairo', sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
     }
     
+    /* تحسين الخلفية العامة لتكون أغمق مثل الصورة */
     .stApp {
-        background: linear-gradient(135deg, #0a0a0f 0%, #0e1117 100%);
+        background: #090b10 !important;
     }
     
-    /* الهيدر */
+    /* شريط التمرير العلوي للمؤشرات (Ticker Bar) */
+    .ticker-wrapper {
+        background: #141820;
+        padding: 10px 20px;
+        border-bottom: 1px solid #00ffcc30;
+        display: flex;
+        gap: 30px;
+        overflow-x: auto;
+        white-space: nowrap;
+        margin-bottom: 20px;
+        border-radius: 0;
+    }
+    
+    .ticker-item {
+        font-size: 13px;
+        color: #fff;
+        font-weight: 500;
+    }
+    
+    /* الهيدر العلوي */
     .main-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 15px 25px;
-        background: rgba(10, 10, 15, 0.95);
-        border-bottom: 1px solid #00ffcc30;
+        background: #0d1117;
+        border-bottom: 1px solid #00ffcc20;
         margin-bottom: 20px;
     }
     
@@ -87,19 +71,59 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
     }
     
+    /* تحسين بطاقات التنبيهات الجانبية لتطابق الصورة */
+    .alert-card-success {
+        background: rgba(0, 255, 204, 0.03) !important;
+        border: 1px solid rgba(0, 255, 204, 0.2) !important;
+        border-right: 4px solid #00ffcc !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        margin-bottom: 15px !important;
+        transition: all 0.3s;
+    }
+    
+    .alert-card-success:hover {
+        background: rgba(0, 255, 204, 0.08) !important;
+        transform: translateX(-3px);
+    }
+    
+    .alert-card-danger {
+        background: rgba(255, 68, 68, 0.03) !important;
+        border: 1px solid rgba(255, 68, 68, 0.2) !important;
+        border-right: 4px solid #ff4444 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        margin-bottom: 15px !important;
+        transition: all 0.3s;
+    }
+    
+    .alert-card-danger:hover {
+        background: rgba(255, 68, 68, 0.08) !important;
+        transform: translateX(-3px);
+    }
+    
+    .alert-card-warning {
+        background: rgba(255, 170, 0, 0.03) !important;
+        border: 1px solid rgba(255, 170, 0, 0.2) !important;
+        border-right: 4px solid #ffaa00 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        margin-bottom: 15px !important;
+    }
+    
     /* بطاقات الصفقات */
     .trade-card {
-        background: rgba(20, 25, 35, 0.95);
-        border-radius: 16px;
+        background: #0d1117;
+        border: 1px solid #1c222d;
+        border-radius: 12px;
         padding: 15px;
         margin: 10px 0;
-        border: 1px solid rgba(0, 255, 204, 0.2);
         transition: all 0.3s;
     }
     
     .trade-card:hover {
-        transform: translateX(-5px);
         border-color: #00ffcc;
+        transform: translateX(-5px);
     }
     
     .trade-profit {
@@ -112,11 +136,12 @@ st.markdown("""
         font-weight: bold;
     }
     
+    /* شريط التقدم */
     .progress-bar-container {
-        background: #222;
-        height: 8px;
+        background: #1c222d;
+        height: 6px;
         border-radius: 10px;
-        margin-top: 8px;
+        margin-top: 10px;
         overflow: hidden;
     }
     
@@ -125,31 +150,6 @@ st.markdown("""
         height: 100%;
         border-radius: 10px;
         transition: width 0.5s;
-    }
-    
-    /* بطاقات التنبيهات */
-    .alert-card-success {
-        background: rgba(0, 255, 204, 0.1);
-        border-left: 5px solid #00ffcc;
-        padding: 15px;
-        border-radius: 12px;
-        margin: 10px 0;
-    }
-    
-    .alert-card-danger {
-        background: rgba(255, 68, 68, 0.1);
-        border-left: 5px solid #ff4444;
-        padding: 15px;
-        border-radius: 12px;
-        margin: 10px 0;
-    }
-    
-    .alert-card-warning {
-        background: rgba(255, 170, 0, 0.1);
-        border-left: 5px solid #ffaa00;
-        padding: 15px;
-        border-radius: 12px;
-        margin: 10px 0;
     }
     
     /* بطاقات الإحصائيات */
@@ -161,11 +161,17 @@ st.markdown("""
     }
     
     .stat-card {
-        background: rgba(15, 20, 30, 0.9);
-        border-radius: 16px;
+        background: #0d1117;
+        border: 1px solid #1c222d;
+        border-radius: 12px;
         padding: 15px;
         text-align: center;
-        border: 1px solid rgba(0, 255, 204, 0.15);
+        transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+        border-color: #00ffcc;
+        transform: translateY(-2px);
     }
     
     .stat-value {
@@ -176,45 +182,108 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
     }
     
+    .stat-label {
+        font-size: 12px;
+        color: #888;
+        margin-top: 5px;
+    }
+    
+    /* تصميم الأزرار لتكون دائرية أكثر مثل الصور */
+    .stButton > button {
+        border-radius: 20px !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 15px rgba(0, 255, 204, 0.1);
+        transition: all 0.3s;
+    }
+    
+    .stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 20px rgba(0, 255, 204, 0.2);
+    }
+    
+    /* تنسيق الجداول لتشبه الصورة */
+    .stDataFrame {
+        border: 1px solid #1c222d !important;
+        border-radius: 10px !important;
+    }
+    
+    /* تبويبات */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #0d1117;
+        padding: 8px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px;
+        padding: 8px 24px;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #00ffcc, #00b4d8);
+        color: #000 !important;
+    }
+    
+    /* تذييل */
     .footer {
         text-align: center;
         padding: 20px;
         color: #555;
         font-size: 11px;
         margin-top: 30px;
-        border-top: 1px solid #1a1a1a;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(135deg, #00ffcc, #00b4d8);
-        color: #000;
-        font-weight: bold;
-        border: none;
-        border-radius: 10px;
-        padding: 8px 16px;
-    }
-    
-    .delete-btn > button {
-        background: linear-gradient(135deg, #ff4444, #cc0000);
+        border-top: 1px solid #1c222d;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 4. دوال التوصيات والتحليل
+# 3. تهيئة قاعدة البيانات
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+JOURNAL_FILE = DATA_DIR / "trading_journal.json"
+
+def load_journal():
+    if JOURNAL_FILE.exists():
+        with open(JOURNAL_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
+
+def save_journal(journal):
+    with open(JOURNAL_FILE, 'w', encoding='utf-8') as f:
+        json.dump(journal, f, ensure_ascii=False, indent=2)
+
+def update_journal_prices(journal):
+    updated = []
+    for trade in journal:
+        try:
+            ticker = trade["symbol"] + ".CA" if not trade["symbol"].endswith(".CA") else trade["symbol"]
+            stock = yf.Ticker(ticker)
+            df = stock.history(period="1d")
+            if not df.empty:
+                current = df['Close'].iloc[-1]
+                trade["current_price"] = current
+                trade["profit_pct"] = ((current - trade["entry_price"]) / trade["entry_price"]) * 100
+                target_range = trade["target_price"] - trade["entry_price"]
+                progress = ((current - trade["entry_price"]) / target_range) * 100 if target_range > 0 else 0
+                trade["progress"] = min(100, max(0, progress))
+        except:
+            pass
+        updated.append(trade)
+    return updated
+
+# 4. دوال التوصيات
 def generate_ai_recommendations():
-    """توليد توصيات الذكاء الاصطناعي"""
-    # محاكاة فرص السوق
     opportunities = [
         {"symbol": "EALR", "reason": "اختراق سيولة + سعر رخيص محاسبياً", "confidence": "85%", "price": 396.15, "target": 420.00},
-        {"symbol": "AMES", "reason": "نمو الأرباح + دعم قوي", "confidence": "78%", "price": 55.87, "target": 62.00},
-        {"symbol": "WKOL", "reason": "اختراق مقاومة تاريخية", "confidence": "72%", "price": 330.80, "target": 350.00}
+        {"symbol": "AMES", "reason": "نمو الأرباح + دعم قوي", "confidence": "78%", "price": 55.87, "target": 62.00}
     ]
-    
     warnings = [
         {"symbol": "WKOL", "reason": "السعر تجاوز القيمة العادلة بـ 40%", "risk": "عالية"},
         {"symbol": "SVCE_R1", "reason": "حجم تداول منخفض", "risk": "متوسطة"}
     ]
-    
     return opportunities, warnings
 
 # 5. الواجهة الرئيسية
@@ -223,12 +292,25 @@ def main():
     if 'journal' not in st.session_state:
         st.session_state.journal = load_journal()
     
-    # الهيدر
+    # ====================== شريط المؤشرات العلوي (Ticker Bar) ======================
+    st.markdown("""
+    <div class="ticker-wrapper">
+        <span class="ticker-item"><span style="color:#888;">EGX30:</span> <span style="color:#00ff88;">51,760.97 ▲</span></span>
+        <span class="ticker-item"><span style="color:#888;">EGX70:</span> <span style="color:#ff4444;">14,028.98 ▼</span></span>
+        <span class="ticker-item"><span style="color:#888;">S&P 500:</span> <span style="color:#00ff88;">7,230.11 ▲</span></span>
+        <span class="ticker-item"><span style="color:#888;">NASDAQ:</span> <span style="color:#00ff88;">18,750.22 ▲</span></span>
+        <span class="ticker-item"><span style="color:#888;">TASI:</span> <span style="color:#ff4444;">12,450.33 ▼</span></span>
+        <span class="ticker-item"><span style="color:#888;">السيولة:</span> <span style="color:#00b4d8;">2.5B</span></span>
+        <span class="ticker-item"><span style="color:#888;">الذهب:</span> <span style="color:#00ff88;">$2,350.40 ▲</span></span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ====================== الهيدر ======================
     st.markdown("""
     <div class="main-header">
         <div>
             <span class="logo-title">🧠 البورصجي AI PRO</span>
-            <span style="font-size: 12px; color: #888; margin-right: 10px;">النظام المتكامل</span>
+            <span style="font-size: 12px; color: #888; margin-right: 10px;">المنصة الذكية المتكاملة</span>
         </div>
         <div style="display: flex; gap: 15px;">
             <span style="font-size: 12px;">📅 """ + datetime.now().strftime("%Y-%m-%d") + """</span>
@@ -237,7 +319,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # ====================== الشريط الجانبي مع التنبيهات ======================
+    # ====================== الشريط الجانبي ======================
     with st.sidebar:
         st.markdown("## 🎮 لوحة التحكم")
         
@@ -253,30 +335,26 @@ def main():
         
         opportunities, warnings = generate_ai_recommendations()
         
-        # عرض فرص الشراء
-        for opp in opportunities[:2]:
+        for opp in opportunities:
             st.markdown(f"""
             <div class="alert-card-success">
-                <strong style="color: #00ffcc;">🚀 فرصة ذهبية: {opp['symbol']}</strong><br>
+                <strong style="color: #00ffcc;">🚀 فرصة: {opp['symbol']}</strong><br>
                 <span style="font-size: 12px; color: #ccc;">{opp['reason']}</span><br>
-                <span style="color: #ffcc00; font-size: 12px;">🎯 ثقة المحرك: {opp['confidence']}</span><br>
-                <span style="font-size: 11px;">💰 السعر: {opp['price']:.2f} | 🎯 الهدف: {opp['target']:.2f}</span>
+                <span style="color: #ffcc00; font-size: 11px;">🎯 ثقة: {opp['confidence']}</span><br>
+                <span style="font-size: 10px;">💰 {opp['price']:.2f} | 🎯 {opp['target']:.2f}</span>
             </div>
             """, unsafe_allow_html=True)
         
-        # عرض التحذيرات
         for warn in warnings:
             st.markdown(f"""
             <div class="alert-card-danger">
                 <strong style="color: #ff4444;">⚠️ تحذير: {warn['symbol']}</strong><br>
                 <span style="font-size: 12px; color: #ccc;">{warn['reason']}</span><br>
-                <span style="color: #ffaa00; font-size: 11px;">🎯 مستوى الخطر: {warn['risk']}</span>
+                <span style="color: #ffaa00; font-size: 11px;">🎯 الخطر: {warn['risk']}</span>
             </div>
             """, unsafe_allow_html=True)
         
         st.markdown("---")
-        
-        # حالة الذكاء الاصطناعي
         st.success("🧠 Gemini AI: متصل")
         st.caption("🕶️ العين التي لا تنام في الأسواق")
     
@@ -287,7 +365,6 @@ def main():
     with tab1:
         st.markdown("### 📊 نظرة عامة على المحفظة")
         
-        # حساب إحصائيات من المفكرة
         if st.session_state.journal:
             total_invested = sum(t["entry_price"] * t["quantity"] for t in st.session_state.journal)
             current_value = sum(t.get("current_price", t["entry_price"]) * t["quantity"] for t in st.session_state.journal)
@@ -317,9 +394,9 @@ def main():
                     labels=list(sectors.keys()),
                     values=list(sectors.values()),
                     hole=0.4,
-                    marker_colors=["#00ffcc", "#ff00ff", "#ffaa00", "#00ff88"]
+                    marker_colors=["#00ffcc", "#ff00ff", "#ffaa00", "#00ff88", "#ff4444"]
                 )])
-                fig.update_layout(template="plotly_dark", height=400, title="توزيع الاستثمارات حسب القطاع")
+                fig.update_layout(template="plotly_dark", height=400, title="توزيع الاستثمارات حسب القطاع", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig, use_container_width=True)
     
     # ====================== التبويب 2: مفكرة الصفقات ======================
@@ -366,25 +443,15 @@ def main():
         
         # عرض الصفقات القائمة
         if st.session_state.journal:
-            # تحديث الأسعار
             st.session_state.journal = update_journal_prices(st.session_state.journal)
             save_journal(st.session_state.journal)
             
-            # عرض الصفقات في شبكة
             cols = st.columns(2)
             for idx, trade in enumerate(st.session_state.journal):
                 with cols[idx % 2]:
                     profit_pct = trade.get("profit_pct", 0)
                     profit_class = "trade-profit" if profit_pct >= 0 else "trade-loss"
                     progress = trade.get("progress", 0)
-                    
-                    # تحديد لون شريط التقدم
-                    if profit_pct >= 0:
-                        status_color = "#00ffcc"
-                        status_text = f"{profit_pct:+.1f}% 📈"
-                    else:
-                        status_color = "#ff4444"
-                        status_text = f"{profit_pct:+.1f}% 📉"
                     
                     st.markdown(f"""
                     <div class="trade-card">
@@ -393,31 +460,27 @@ def main():
                                 <span style="font-weight: bold; font-size: 16px;">{trade['symbol']}</span>
                                 <span style="font-size: 10px; color: #888; margin-right: 10px;">{trade.get('sector', 'غير محدد')}</span>
                             </div>
-                            <div class="{profit_class}">{status_text}</div>
+                            <div class="{profit_class}">{profit_pct:+.1f}%</div>
                         </div>
                         <div style="font-size: 12px; margin-top: 10px;">
                             💰 الدخول: {trade['entry_price']:.2f} | 🎯 الهدف: {trade['target_price']:.2f}<br>
-                            📊 السعر الحالي: {trade.get('current_price', trade['entry_price']):.2f}
+                            📊 الحالي: {trade.get('current_price', trade['entry_price']):.2f}
                         </div>
                         <div class="progress-bar-container">
                             <div class="progress-bar-fill" style="width: {progress}%;"></div>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                            <span style="font-size: 10px; color: #888;">اقترب من الهدف ({progress:.0f}%)</span>
+                            <span style="font-size: 10px; color: #888;">نسبة الإنجاز: {progress:.0f}%</span>
                             <span style="font-size: 10px; color: #888;">الكمية: {trade['quantity']}</span>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # أزرار التحكم
-                    col_del, col_edit = st.columns(2)
-                    with col_del:
-                        if st.button(f"🗑️ حذف", key=f"del_{idx}"):
-                            st.session_state.journal.pop(idx)
-                            save_journal(st.session_state.journal)
-                            st.rerun()
+                    if st.button(f"🗑️ حذف", key=f"del_{idx}"):
+                        st.session_state.journal.pop(idx)
+                        save_journal(st.session_state.journal)
+                        st.rerun()
                     
-                    # تنبيه عند تحقيق الهدف
                     if progress >= 100:
                         st.success(f"🎉 **تهانينا!** صفقة {trade['symbol']} حققت الهدف المستهدف!")
         else:
@@ -428,7 +491,6 @@ def main():
         st.markdown("### 📄 تقارير الأداء")
         
         if st.session_state.journal:
-            # حساب إحصائيات سريعة
             total_trades = len(st.session_state.journal)
             winning_trades = len([t for t in st.session_state.journal if t.get("profit_pct", 0) > 0])
             losing_trades = len([t for t in st.session_state.journal if t.get("profit_pct", 0) < 0])
@@ -444,51 +506,57 @@ def main():
             # جدول ملخص الصفقات
             summary_df = pd.DataFrame([{
                 "السهم": t["symbol"],
-                "سعر الدخول": t["entry_price"],
-                "السعر الحالي": t.get("current_price", t["entry_price"]),
+                "سعر الدخول": f"{t['entry_price']:.2f}",
+                "السعر الحالي": f"{t.get('current_price', t['entry_price']):.2f}",
                 "الربح %": f"{t.get('profit_pct', 0):+.1f}%",
-                "الحالة": "🟢 نشط" if t.get("status") == "active" else "🔴 مغلق"
+                "الحالة": "🟢 نشط"
             } for t in st.session_state.journal])
             
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
             
-            # توصيات الذكاء الاصطناعي
-            st.markdown("### 🧠 توصيات البورصجي AI")
+            # ====================== المنطق الذكي للتقرير ======================
+            st.markdown("### 🧠 تحليل العقل المدبر")
             
-            recommendations = []
-            if win_rate > 70:
-                recommendations.append("✅ أداء ممتاز! استمر في استراتيجيتك الحالية.")
-            elif win_rate < 40:
-                recommendations.append("📊 نسبة النجاح منخفضة. راجع استراتيجيتك وركز على جودة الصفقات.")
+            avg_profit = sum(t.get('profit_pct', 0) for t in st.session_state.journal) / len(st.session_state.journal) if st.session_state.journal else 0
             
-            # تحليل القطاعات
+            if avg_profit > 5:
+                ai_advice = "🧠 **تحليل العقل:** أداؤك يتفوق على السوق بنسبة ممتازة! استمر في اقتناص فرص السيولة العالية والحفاظ على استراتيجيتك."
+            elif avg_profit > 0:
+                ai_advice = "🧠 **تحليل العقل:** محفظتك تحقق أرباحاً إيجابية. نوصي بتنويع القطاعات وتقليل المخاطر للحفاظ على هذا الأداء."
+            else:
+                ai_advice = "🧠 **تحليل العقل:** نلاحظ بطء في حركة محفظتك. ربما حان الوقت لفلترة الأسهم ذات السيولة الأقل من 50% والتركيز على الفرص القوية."
+            
+            st.info(ai_advice)
+            
+            # توصيات إضافية
             sectors_in_portfolio = set(t.get("sector", "") for t in st.session_state.journal)
             if len(sectors_in_portfolio) == 1:
-                recommendations.append(f"⚠️ محفظتك مركزة في قطاع واحد ({list(sectors_in_portfolio)[0]}). ننصح بالتنويع لتقليل المخاطر.")
+                st.warning("⚠️ **تنبيه العقل:** محفظتك مركزة في قطاع واحد. ننصح بالتنويع لتقليل المخاطر.")
             
-            if not recommendations:
-                recommendations.append("محفظتك متوازنة. استمر في مراقبة السوق والبحث عن فرص جديدة.")
+            if win_rate > 70:
+                st.success("🎯 **إشادة العقل:** نسبة نجاحك ممتازة! استمر في تحليل الصفقات قبل الدخول.")
+            elif win_rate < 40:
+                st.warning("📊 **نصيحة العقل:** نسبة النجاح منخفضة. حاول تقليل عدد الصفقات والتركيز على الجودة.")
             
-            for rec in recommendations:
-                st.info(rec)
-            
-            # زر تصدير التقرير
-            if st.button("📥 تصدير تقرير PDF", use_container_width=True):
-                st.info("🔧 ميزة تصدير PDF قيد التطوير - ستكون متاحة قريباً!")
         else:
             st.info("📭 لا توجد بيانات كافية لعرض التقارير. أضف صفقات إلى المفكرة أولاً")
+            
+            # عرض نموذج للعقل المدبر حتى بدون بيانات
+            st.markdown("### 🧠 العقل المدبر يقول...")
+            st.info("🧠 انتظر حتى تقوم بإضافة صفقات إلى مفكرتك وسأقوم بتحليل أدائك وتقديم توصيات ذكية!")
     
     # ====================== التبويب 4: عن المنصة ======================
-    with tab3:
+    with tab4:
         st.markdown("### ℹ️ عن منصة البورصجي AI")
         st.markdown("""
-        **🧠 البورصجي AI - النظام المتكامل لإدارة المحفظة**
+        **🧠 البورصجي AI - المنصة الذكية المتكاملة**
         
         **الميزات الرئيسية:**
         - ✅ **مفكرة الصفقات الذكية** - تتبع صفقاتك مع شريط تقدم بصري
         - ✅ **رادار الفرص الذكي** - تنبيهات فورية لفرص الشراء والبيع
         - ✅ **تحليل المحفظة** - إحصائيات وأرباح وتوزيع القطاعات
         - ✅ **توصيات الذكاء الاصطناعي** - نصائح مخصصة لتحسين أدائك
+        - ✅ **شريط المؤشرات الحية** - متابعة الأسواق لحظة بلحظة
         
         **البيانات:**
         - 📊 الأسعار اللحظية من Yahoo Finance
