@@ -1,6 +1,6 @@
 # ============================================================
-# core.py - المحرك الأساسي
-# تم التصحيح: STOCKS معرف في المستوى العام (Global Scope)
+# core.py - المحرك الأساسي (مصحح)
+# تم التصحيح: جميع الدوال تبدأ بـ def (حرف صغير)
 # ============================================================
 
 import numpy as np
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 warnings.filterwarnings('ignore')
 
 # ============================================================
-# قائمة الأسهم (معرفة في المستوى العام - Global Scope)
+# قائمة الأسهم - في المستوى العام (بدون مسافات قبلها)
 # ============================================================
 
 STOCKS = {
@@ -50,12 +50,10 @@ def get_data(ticker):
         df['MA20'] = ta.sma(df['Close'], length=20)
         df['MA50'] = ta.sma(df['Close'], length=50)
         
-        # Bollinger Bands
         bb = ta.bbands(df['Close'], length=20, std=2)
         if bb is not None:
             df = pd.concat([df, bb], axis=1)
         
-        # MACD
         macd = ta.macd(df['Close'])
         if macd is not None:
             df = pd.concat([df, macd], axis=1)
@@ -288,11 +286,3 @@ def scan_market_parallel():
             })
     
     return pd.DataFrame(results).sort_values("الدرجة", ascending=False)
-
-# ============================================================
-# دالة للتحقق من المتغيرات المتاحة (Debugging)
-# ============================================================
-
-def get_available_variables():
-    """إرجاع قائمة المتغيرات المتاحة في core"""
-    return [var for var in dir() if not var.startswith('_')]
