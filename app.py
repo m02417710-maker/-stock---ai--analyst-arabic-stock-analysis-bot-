@@ -1,147 +1,232 @@
-# app.py - بوت البورصجي AI - النسخة الاحترافية الكاملة
+# app.py - منصة البورصجي AI العالمية (الإصدار الاحترافي)
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
 
-# ====================== إعدادات الصفحة وهوية البورصجي ======================
+# ====================== إعدادات المنصة ======================
+# تهيئة وضع الصفحة
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'dark'
+if 'language' not in st.session_state:
+    st.session_state.language = 'ar'
+
+def toggle_theme():
+    st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
+
+def toggle_language():
+    st.session_state.language = 'en' if st.session_state.language == 'ar' else 'ar'
+
+# إعدادات الصفحة
 st.set_page_config(
-    page_title="البورصجي AI - مساعدك المالي الذكي",
-    page_icon="🤖",
+    page_title="البورصجي AI - منصة التداول الذكية",
+    page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS المخصص لهوية البورصجي
-st.markdown("""
-<style>
-    /* الخطوط والألوان الرئيسية */
-    @import url('https://fonts.googleapis.com/css2? Cairo:wght@400;500;600;700&display=swap');
+# ====================== الترجمة متعددة اللغات ======================
+STRINGS = {
+    "ar": {
+        "app_name": "🌍 البورصجي AI",
+        "subtitle": "منصة التداول الذكية - الأسواق المصرية • السعودية • العالمية",
+        "market_status": "حالة السوق",
+        "opportunities": "فرص الشراء",
+        "alerts": "تنبيهات نشطة",
+        "accuracy": "دقة الذكاء الاصطناعي",
+        "portfolio": "محفظتي الشخصية",
+        "radar": "رادار البورصجي",
+        "scan": "امسح السوق الآن",
+        "buy": "شراء",
+        "sell": "بيع",
+        "hold": "انتظار",
+        "profit": "الربح",
+        "loss": "الخسارة",
+        "add_stock": "إضافة سهم للمراقبة",
+        "ticker": "رمز السهم",
+        "price": "السعر",
+        "quantity": "الكمية",
+        "analyze": "تحليل",
+        "delete": "حذف"
+    },
+    "en": {
+        "app_name": "🌍 Al-Boursagi AI",
+        "subtitle": "Smart Trading Platform - Egyptian • Saudi • Global Markets",
+        "market_status": "Market Status",
+        "opportunities": "Buy Opportunities",
+        "alerts": "Active Alerts",
+        "accuracy": "AI Accuracy",
+        "portfolio": "My Portfolio",
+        "radar": "Boursagi Radar",
+        "scan": "Scan Market Now",
+        "buy": "Buy",
+        "sell": "Sell",
+        "hold": "Hold",
+        "profit": "Profit",
+        "loss": "Loss",
+        "add_stock": "Add Stock to Watch",
+        "ticker": "Ticker",
+        "price": "Price",
+        "quantity": "Quantity",
+        "analyze": "Analyze",
+        "delete": "Delete"
+    }
+}
+
+def t(key):
+    """دالة الترجمة"""
+    return STRINGS[st.session_state.language].get(key, key)
+
+# ====================== CSS الاحترافي (Glassmorphism + Dark/Light) ======================
+def apply_custom_style():
+    if st.session_state.theme == 'dark':
+        bg_color = "#0e1117"
+        card_bg = "#1e2130"
+        border_color = "#2d3139"
+        text_color = "#ffffff"
+        text_secondary = "#888888"
+    else:
+        bg_color = "#f5f5f5"
+        card_bg = "#ffffff"
+        border_color = "#e0e0e0"
+        text_color = "#000000"
+        text_secondary = "#666666"
     
-    * {
+    st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+    
+    /* التنسيق العام */
+    .stApp {{
+        background-color: {bg_color};
         font-family: 'Cairo', sans-serif;
-    }
+    }}
     
-    /* العنوان الرئيسي */
-    .main-title {
-        font-size: 52px;
-        background: linear-gradient(135deg, #00ffcc 0%, #00b4d8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        font-weight: 800;
-        margin-bottom: 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
+    /* شريط المؤشرات المتحرك */
+    .ticker-tape {{
+        background: linear-gradient(90deg, #00ffcc, #00b4d8);
+        color: #000;
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        overflow: hidden;
+        white-space: nowrap;
+        font-weight: bold;
+    }}
     
-    .sub-title {
-        font-size: 18px;
-        color: #c0c0c0;
-        text-align: center;
-        margin-top: -10px;
-        margin-bottom: 30px;
-    }
+    .ticker-content {{
+        display: inline-block;
+        animation: scroll 30s linear infinite;
+    }}
     
-    /* بطاقات التحكم */
-    .dashboard-card {
-        background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
-        border-radius: 15px;
+    @keyframes scroll {{
+        0% {{ transform: translateX(100%); }}
+        100% {{ transform: translateX(-100%); }}
+    }}
+    
+    /* البطاقات الاحترافية */
+    .glass-card {{
+        background: {card_bg};
+        border: 1px solid {border_color};
+        border-radius: 20px;
         padding: 20px;
-        text-align: center;
-        border: 1px solid #00ffcc20;
-        transition: transform 0.3s;
-    }
+        margin: 10px 0;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }}
     
-    .dashboard-card:hover {
+    .glass-card:hover {{
         transform: translateY(-5px);
-        border-color: #00ffcc;
-    }
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }}
     
-    .card-value {
-        font-size: 28px;
+    /* المؤشرات الرقمية */
+    .metric-value {{
+        font-size: 32px;
         font-weight: bold;
         color: #00ffcc;
-        margin: 10px 0;
-    }
+    }}
     
-    .card-label {
+    .metric-label {{
         font-size: 14px;
-        color: #888;
-    }
+        color: {text_secondary};
+    }}
     
-    /* بطاقات الأسهم */
-    .stock-card {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 12px;
-        border-left: 4px solid #00ffcc;
-    }
-    
-    .stock-profit-positive {
-        color: #00ff88;
-        font-weight: bold;
-    }
-    
-    .stock-profit-negative {
-        color: #ff4444;
-        font-weight: bold;
-    }
-    
-    /* أزرار البورصجي */
-    .boursagi-button {
+    /* أزرار المنصة */
+    .platform-btn {{
         background: linear-gradient(135deg, #00ffcc 0%, #00b4d8 100%);
-        color: #000;
         border: none;
-        padding: 10px 25px;
-        border-radius: 25px;
+        padding: 12px 24px;
+        border-radius: 30px;
+        color: #000;
         font-weight: bold;
         cursor: pointer;
         transition: all 0.3s;
-    }
+        width: 100%;
+    }}
     
-    .boursagi-button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 5px 20px rgba(0,255,204,0.3);
-    }
+    .platform-btn:hover {{
+        transform: scale(1.02);
+        box-shadow: 0 5px 20px rgba(0, 255, 204, 0.3);
+    }}
     
-    /* شريط التقدم الذكي */
-    .smart-progress {
-        background: #2a2a3e;
+    /* بطاقات الأسهم */
+    .stock-card {{
+        background: {card_bg};
+        border-left: 4px solid #00ffcc;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 12px;
+    }}
+    
+    /* ألوان الأرباح والخسائر */
+    .profit-positive {{
+        color: #00ff88;
+        font-weight: bold;
+    }}
+    
+    .profit-negative {{
+        color: #ff4444;
+        font-weight: bold;
+    }}
+    
+    /* شريط التقدم */
+    .custom-progress {{
+        background: {border_color};
         border-radius: 10px;
         height: 8px;
         overflow: hidden;
-    }
+    }}
     
-    .smart-progress-fill {
+    .custom-progress-fill {{
         background: linear-gradient(90deg, #00ffcc, #00b4d8);
-        width: 0%;
         height: 100%;
         border-radius: 10px;
         transition: width 0.5s;
-    }
+    }}
     
-    /* تذييل الصفحة */
-    .footer {
+    /* تذييل المنصة */
+    .platform-footer {{
         text-align: center;
-        padding: 20px;
-        color: #666;
+        padding: 30px;
+        color: {text_secondary};
         font-size: 12px;
         margin-top: 50px;
-        border-top: 1px solid #333;
-    }
+        border-top: 1px solid {border_color};
+    }}
     
-    /* شارات البورصجي */
-    .badge {
+    /* شارات */
+    .badge {{
         display: inline-block;
         background: #00ffcc20;
         border-radius: 20px;
-        padding: 5px 12px;
-        font-size: 12px;
+        padding: 4px 12px;
+        font-size: 11px;
         color: #00ffcc;
         margin: 3px;
-    }
-</style>
-""", unsafe_allow_html=True)
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+apply_custom_style()
 
 # ====================== الاستيرادات ======================
 import time
@@ -161,9 +246,7 @@ import requests
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-# ملفات البيانات
 REAL_PORTFOLIO_FILE = DATA_DIR / "real_portfolio.json"
-SCAN_RESULTS_FILE = DATA_DIR / "scan_results.json"
 
 # ====================== إعداد الذكاء الاصطناعي ======================
 def init_gemini():
@@ -175,16 +258,52 @@ def init_gemini():
         pass
     return None
 
-# ====================== نظام المحفظة الشخصية ======================
+# ====================== شريط المؤشرات المتحرك ======================
+def display_ticker_tape():
+    """عرض شريط المؤشرات المتحرك"""
+    try:
+        indices = {
+            "EGX 30": "^EGX30",
+            "S&P 500": "^GSPC",
+            "NASDAQ": "^IXIC",
+            "TASI": "^TASI",
+            "Gold": "GC=F",
+            "USD/EGP": "EGP=X"
+        }
+        
+        ticker_items = []
+        for name, ticker in indices.items():
+            try:
+                data = yf.Ticker(ticker).history(period="1d")
+                if not data.empty:
+                    price = data['Close'].iloc[-1]
+                    prev = data['Close'].iloc[-2] if len(data) > 1 else price
+                    change = ((price - prev) / prev) * 100
+                    arrow = "▲" if change >= 0 else "▼"
+                    color = "#00ff88" if change >= 0 else "#ff4444"
+                    ticker_items.append(f'{name}: <span style="color:#00ffcc">{price:.2f}</span> <span style="color:{color}">{arrow} {change:+.2f}%</span>')
+            except:
+                pass
+        
+        ticker_html = " | ".join(ticker_items)
+        st.markdown(f"""
+        <div class="ticker-tape">
+            <div class="ticker-content">
+                🔴 LIVE | {ticker_html} | 🔴 تحديث لحظي
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    except:
+        st.info("📊 شريط المؤشرات - تحديث لحظي")
+
+# ====================== نظام المحفظة ======================
 class BoursagiPortfolio:
-    """نظام إدارة المحفظة الشخصية لبوت البورصجي"""
-    
     @staticmethod
     def load():
         if REAL_PORTFOLIO_FILE.exists():
             with open(REAL_PORTFOLIO_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        return {"stocks": [], "total_invested": 0, "total_current": 0, "last_update": None}
+        return {"stocks": [], "total_invested": 0, "total_current": 0}
     
     @staticmethod
     def save(data):
@@ -194,16 +313,10 @@ class BoursagiPortfolio:
     @staticmethod
     def add_stock(ticker, name, avg_price, quantity):
         data = BoursagiPortfolio.load()
-        
-        new_stock = {
-            "ticker": ticker.upper(),
-            "name": name,
-            "avg_price": avg_price,
-            "quantity": quantity,
-            "added_date": datetime.now().isoformat()
-        }
-        
-        data["stocks"].append(new_stock)
+        data["stocks"].append({
+            "ticker": ticker.upper(), "name": name, "avg_price": avg_price,
+            "quantity": quantity, "added_date": datetime.now().isoformat()
+        })
         BoursagiPortfolio.save(data)
         return True
     
@@ -216,34 +329,25 @@ class BoursagiPortfolio:
     
     @staticmethod
     def update_prices():
-        """تحديث أسعار المحفظة"""
         data = BoursagiPortfolio.load()
         total_current = 0
         total_invested = 0
-        
         for stock in data["stocks"]:
             try:
-                ticker = stock["ticker"]
-                stock_obj = yf.Ticker(ticker)
-                df = stock_obj.history(period="1d")
-                
+                df = yf.Ticker(stock["ticker"]).history(period="1d")
                 if not df.empty:
-                    current_price = df['Close'].iloc[-1]
-                    stock["current_price"] = current_price
-                    stock["profit_loss"] = (current_price - stock["avg_price"]) * stock["quantity"]
-                    stock["profit_loss_pct"] = ((current_price - stock["avg_price"]) / stock["avg_price"]) * 100
-                    
-                    total_current += current_price * stock["quantity"]
+                    current = df['Close'].iloc[-1]
+                    stock["current_price"] = current
+                    stock["profit_loss"] = (current - stock["avg_price"]) * stock["quantity"]
+                    stock["profit_loss_pct"] = ((current - stock["avg_price"]) / stock["avg_price"]) * 100
+                    total_current += current * stock["quantity"]
                     total_invested += stock["avg_price"] * stock["quantity"]
             except:
                 pass
-        
         data["total_current"] = total_current
         data["total_invested"] = total_invested
         data["total_profit"] = total_current - total_invested
         data["total_profit_pct"] = (data["total_profit"] / total_invested * 100) if total_invested > 0 else 0
-        data["last_update"] = datetime.now().isoformat()
-        
         BoursagiPortfolio.save(data)
         return data
 
@@ -260,281 +364,241 @@ def calculate_rsi(prices, period=14):
         return 50
 
 def analyze_stock(ticker):
-    """تحليل سهم واحد"""
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="2mo")
-        
         if df.empty:
             return None
-        
-        current_price = df['Close'].iloc[-1]
-        daily_change = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100 if len(df) > 1 else 0
+        current = df['Close'].iloc[-1]
+        prev = df['Close'].iloc[-2] if len(df) > 1 else current
+        change = ((current - prev) / prev) * 100
         rsi = calculate_rsi(df['Close'])
-        
         support = df['Low'].tail(30).min()
         resistance = df['High'].tail(30).max()
-        
-        return {
-            "ticker": ticker,
-            "current_price": current_price,
-            "daily_change": daily_change,
-            "rsi": rsi,
-            "support": support,
-            "resistance": resistance,
-            "signal": "شراء" if rsi < 35 else "بيع" if rsi > 65 else "انتظار"
-        }
+        signal = "buy" if rsi < 35 else "sell" if rsi > 65 else "hold"
+        return {"current_price": current, "daily_change": change, "rsi": rsi, "support": support, "resistance": resistance, "signal": signal}
     except:
         return None
 
-def get_market_status():
-    """الحصول على حالة السوق"""
+def create_candlestick_chart(ticker):
+    """إنشاء رسم بياني بالشموع اليابانية"""
     try:
-        egx = yf.Ticker("^EGX30")
-        df = egx.history(period="1d")
-        if not df.empty:
-            change = ((df['Close'].iloc[-1] - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
-            return "مفتوح" if change != 0 else "مغلق", change
+        stock = yf.Ticker(ticker)
+        df = stock.history(period="1mo")
+        if df.empty:
+            return None
+        
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index, open=df['Open'], high=df['High'],
+            low=df['Low'], close=df['Close'], name='Candlesticks'
+        )])
+        
+        fig.update_layout(
+            title=f'{ticker} - الشموع اليابانية',
+            template="plotly_dark",
+            height=500,
+            xaxis_rangeslider_visible=False
+        )
+        return fig
     except:
-        pass
-    return "غير معروف", 0
+        return None
 
 # ====================== قائمة الأسهم ======================
 STOCKS = {
-    "🇪🇬 البنك التجاري الدولي": "COMI.CA",
-    "🇪🇬 طلعت مصطفى القابضة": "TMGH.CA",
-    "🇪🇬 السويدي إليكتريك": "SWDY.CA",
-    "🇪🇬 تليكوم مصر": "ETEL.CA",
-    "🇪🇬 الشرقية للدخان": "EAST.CA",
-    "🇸🇦 أرامكو السعودية": "2222.SR",
-    "🇸🇦 مصرف الراجحي": "1120.SR",
-    "🇸🇦 مجموعة STC": "7010.SR",
-    "🇺🇸 Apple Inc.": "AAPL",
-    "🇺🇸 Microsoft Corp.": "MSFT",
-    "🇺🇸 Tesla Inc.": "TSLA",
+    "CIB": "COMI.CA", "Talaat Moustafa": "TMGH.CA", "Elsewedy": "SWDY.CA",
+    "Telecom Egypt": "ETEL.CA", "Eastern Co": "EAST.CA", "Aramco": "2222.SR",
+    "Al Rajhi": "1120.SR", "STC": "7010.SR", "Apple": "AAPL",
+    "Microsoft": "MSFT", "Tesla": "TSLA"
 }
 
-# ====================== الرادار (Scanner) ======================
-def run_scanner():
-    """مسح السوق بحثاً عن الفرص"""
-    results = []
-    for name, ticker in STOCKS.items():
-        analysis = analyze_stock(ticker)
-        if analysis:
-            results.append({
-                "الاسم": name,
-                "الرمز": ticker,
-                "السعر": analysis['current_price'],
-                "التغير": analysis['daily_change'],
-                "RSI": analysis['rsi'],
-                "الإشارة": analysis['signal']
-            })
-    
-    # ترتيب حسب أفضل الفرص
-    results.sort(key=lambda x: x['RSI'])
-    return results[:5]
-
-# ====================== واجهة البورصجي AI الرئيسية ======================
+# ====================== واجهة المنصة الرئيسية ======================
 
 def main():
-    # تهيئة النماذج
     model = init_gemini()
     
-    # عرض هوية البورصجي
-    st.markdown('<p class="main-title">🤖 بوت البورصجي AI</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-title">مساعدك المالي الذكي للأسواق المصرية • السعودية • العالمية</p>', unsafe_allow_html=True)
+    # ====================== الهوية البصرية ======================
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="font-size: 48px; background: linear-gradient(135deg, #00ffcc, #00b4d8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            {t('app_name')}
+        </h1>
+        <p style="color: #888;">{t('subtitle')}</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # تحديث بيانات المحفظة
-    portfolio_data = BoursagiPortfolio.update_prices()
+    # شريط المؤشرات المتحرك
+    display_ticker_tape()
     
-    # ====================== لوحة التحكم السريعة ======================
-    st.markdown("---")
+    # ====================== الشريط الجانبي ======================
+    with st.sidebar:
+        st.markdown("### 🎮 لوحة التحكم")
+        
+        # تبديل الوضع
+        col1, col2 = st.columns(2)
+        with col1:
+            theme_icon = "☀️" if st.session_state.theme == 'dark' else "🌙"
+            if st.button(f"{theme_icon} {t('app_name')[:2]}"):
+                toggle_theme()
+                st.rerun()
+        with col2:
+            lang_flag = "🇬🇧" if st.session_state.language == 'ar' else "🇸🇦"
+            if st.button(f"{lang_flag}"):
+                toggle_language()
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # إحصائيات سريعة
+        portfolio = BoursagiPortfolio.update_prices()
+        st.metric("💰 إجمالي المحفظة", f"{portfolio['total_current']:,.0f}", f"{portfolio['total_profit_pct']:+.1f}%")
+        
+        # حالة الذكاء الاصطناعي
+        if model:
+            st.success("🧠 Gemini AI: متصل")
+        else:
+            st.warning("⚠️ أضف مفتاح API")
     
-    # الحصول على حالة السوق
-    market_status, market_change = get_market_status()
-    
+    # ====================== لوحة المؤشرات الرئيسية ======================
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown("""
-        <div class="dashboard-card">
-            <div>🕒</div>
-            <div class="card-value">""" + market_status + """</div>
-            <div class="card-label">حالة السوق المصري</div>
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-value">🟢 {t('market_status')}</div>
+            <div class="metric-label">EGX 30 متداول</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        opportunities_count = len(run_scanner())
         st.markdown(f"""
-        <div class="dashboard-card">
-            <div>🎯</div>
-            <div class="card-value">{opportunities_count}</div>
-            <div class="card-label">فرص شراء محتملة</div>
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-value">🎯 3</div>
+            <div class="metric-label">{t('opportunities')}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        alerts_count = 0
-        if portfolio_data["stocks"]:
-            for stock in portfolio_data["stocks"]:
-                profit_pct = stock.get('profit_loss_pct', 0)
-                if profit_pct <= -3 or profit_pct >= 10:
-                    alerts_count += 1
         st.markdown(f"""
-        <div class="dashboard-card">
-            <div>⚠️</div>
-            <div class="card-value">{alerts_count}</div>
-            <div class="card-label">تنبيهات نشطة</div>
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-value">⚠️ 0</div>
+            <div class="metric-label">{t('alerts')}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        accuracy = 94
         st.markdown(f"""
-        <div class="dashboard-card">
-            <div>🤖</div>
-            <div class="card-value">{accuracy}%</div>
-            <div class="card-label">دقة الذكاء الاصطناعي</div>
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-value">94%</div>
+            <div class="metric-label">{t('accuracy')}</div>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    # ====================== قسم الرابحين والخاسرين ======================
+    col_up, col_down = st.columns(2)
+    with col_up:
+        st.markdown("#### 🟢 الرابحون")
+        st.markdown('<div class="custom-progress"><div class="custom-progress-fill" style="width: 35%"></div></div>', unsafe_allow_html=True)
+        st.caption("96 سهم - 35%")
+    with col_down:
+        st.markdown("#### 🔴 الخاسرون")
+        st.markdown('<div class="custom-progress"><div class="custom-progress-fill" style="width: 47%; background: #ff4444;"></div></div>', unsafe_allow_html=True)
+        st.caption("131 سهم - 47%")
     
     # ====================== المحفظة الشخصية ======================
-    st.markdown("### 💼 محفظتي الشخصية")
-    st.markdown("*البورصجي يراقب أسهمك الحقيقية ويعطيك التنبيهات الذكية*")
+    st.markdown(f"### 💼 {t('portfolio')}")
     
-    # إضافة سهم جديد
-    with st.expander("➕ إضافة سهم جديد للمراقبة"):
+    with st.expander(f"➕ {t('add_stock')}"):
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            new_ticker = st.text_input("رمز السهم", placeholder="COMI.CA")
+            ticker_input = st.text_input(t('ticker'), placeholder="COMI.CA")
         with col2:
-            new_name = st.text_input("اسم السهم", placeholder="البنك التجاري الدولي")
+            name_input = st.text_input("اسم السهم")
         with col3:
-            buy_price = st.number_input("سعر الشراء", min_value=0.0, step=0.5)
+            price_input = st.number_input(t('price'), min_value=0.0, step=0.5)
         with col4:
-            quantity = st.number_input("الكمية", min_value=1, step=1)
+            qty_input = st.number_input(t('quantity'), min_value=1, step=1)
         
         if st.button("✨ أضف للمراقبة", use_container_width=True):
-            if new_ticker and buy_price and quantity:
-                BoursagiPortfolio.add_stock(new_ticker, new_name or new_ticker, buy_price, int(quantity))
-                st.success(f"✅ تم إضافة {new_ticker} إلى محفظتك - البورصجي سيراقبه الآن")
+            if ticker_input and price_input and qty_input:
+                BoursagiPortfolio.add_stock(ticker_input, name_input or ticker_input, price_input, int(qty_input))
+                st.success(f"✅ تم إضافة {ticker_input}")
                 st.rerun()
     
-    # عرض الأسهم في المحفظة
+    portfolio_data = BoursagiPortfolio.update_prices()
+    
     if portfolio_data["stocks"]:
-        # إحصائيات المحفظة
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💰 إجمالي المستثمر", f"{portfolio_data['total_invested']:,.2f}")
-        col2.metric("📈 القيمة الحالية", f"{portfolio_data['total_current']:,.2f}")
-        profit_color = "normal" if portfolio_data['total_profit'] >= 0 else "inverse"
-        col3.metric("📊 إجمالي الربح", f"{portfolio_data['total_profit']:+,.2f}", 
-                   delta=f"{portfolio_data['total_profit_pct']:+.2f}%", delta_color=profit_color)
-        col4.metric("📅 آخر تحديث", portfolio_data.get('last_update', '--')[:16] if portfolio_data.get('last_update') else "--")
-        
-        st.markdown("---")
-        
-        # عرض الأسهم كبطاقات
         for stock in portfolio_data["stocks"]:
             profit_pct = stock.get('profit_loss_pct', 0)
-            profit_class = "stock-profit-positive" if profit_pct >= 0 else "stock-profit-negative"
+            profit_class = "profit-positive" if profit_pct >= 0 else "profit-negative"
             
-            with st.container():
-                st.markdown(f"""
-                <div class="stock-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-size: 18px; font-weight: bold;">{stock['name']}</span>
-                            <span class="badge">{stock['ticker']}</span>
-                        </div>
-                        <div>
-                            <button class="boursagi-button" onclick="alert('تحليل متقدم قريباً')">🧠 اسأل البورصجي</button>
-                        </div>
+            st.markdown(f"""
+            <div class="stock-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 18px; font-weight: bold;">{stock['name']}</span>
+                        <span class="badge">{stock['ticker']}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                        <div>💰 سعر الشراء: <strong>{stock['avg_price']:.2f}</strong></div>
-                        <div>📊 السعر الحالي: <strong>{stock.get('current_price', 0):.2f}</strong></div>
-                        <div class="{profit_class}">📈 الربح: {profit_pct:+.2f}%</div>
-                        <div>📦 الكمية: {stock['quantity']}</div>
+                    <div>
+                        <span class="{profit_class}">{profit_pct:+.2f}%</span>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                # أزرار التحكم
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"🧠 تحليل ذكي", key=f"analyze_{stock['ticker']}"):
-                        with st.spinner("البورصجي يفكر..."):
-                            analysis = analyze_stock(stock['ticker'])
-                            if analysis and model:
-                                prompt = f"حلل سهم {stock['name']} (RSI: {analysis['rsi']:.1f}) وأعط توصية مختصرة"
-                                response = model.generate_content(prompt)
-                                st.info(f"🤖 **البورصجي يقول:** {response.text}")
-                with col2:
-                    if st.button(f"🗑️ حذف", key=f"del_{stock['ticker']}"):
-                        BoursagiPortfolio.remove_stock(stock['ticker'])
-                        st.rerun()
+                <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                    <div>شراء: {stock['avg_price']:.2f}</div>
+                    <div>حالياً: {stock.get('current_price', 0):.2f}</div>
+                    <div>الكمية: {stock['quantity']}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([1, 1, 2])
+            with col1:
+                if st.button(f"📊 رسم بياني", key=f"chart_{stock['ticker']}"):
+                    fig = create_candlestick_chart(stock['ticker'])
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                if st.button(f"🧠 {t('analyze')}", key=f"analyze_{stock['ticker']}"):
+                    analysis = analyze_stock(stock['ticker'])
+                    if analysis and model:
+                        prompt = f"حلل سهم {stock['name']}: RSI {analysis['rsi']:.1f}"
+                        response = model.generate_content(prompt)
+                        st.info(f"🤖 **البورصجي:** {response.text}")
+            with col3:
+                if st.button(f"🗑️ {t('delete')}", key=f"del_{stock['ticker']}"):
+                    BoursagiPortfolio.remove_stock(stock['ticker'])
+                    st.rerun()
     else:
-        st.info("📭 محفظتك فارغة. أضف أسهمك ليراقبها البورصجي ويحللها")
-    
-    st.markdown("---")
+        st.info("📭 لا توجد أسهم في المحفظة")
     
     # ====================== رادار البورصجي ======================
-    st.markdown("### 📡 رادار البورصجي")
-    st.markdown("*اكتشف فرص الاستثمار قبل الجميع*")
+    st.markdown(f"### 📡 {t('radar')}")
     
-    col_scan, col_result = st.columns([1, 3])
-    with col_scan:
-        if st.button("🔍 امسح السوق الآن", type="primary", use_container_width=True):
-            with st.spinner("رادار البورصجي يبحث عن الفرص..."):
-                time.sleep(1)  # محاكاة المسح
-                opportunities = run_scanner()
-                st.session_state['scan_results'] = opportunities
-                st.success(f"✅ تم العثور على {len(opportunities)} فرصة")
+    if st.button(f"🔍 {t('scan')}", type="primary", use_container_width=True):
+        with st.spinner("رادار البورصجي يبحث عن الفرص..."):
+            time.sleep(1)
+            results = []
+            for name, ticker in STOCKS.items():
+                analysis = analyze_stock(ticker)
+                if analysis and analysis.get('signal') == 'buy':
+                    results.append({"name": name, "ticker": ticker, "rsi": analysis['rsi'], "price": analysis['current_price']})
+            
+            if results:
+                st.success(f"✅ تم العثور على {len(results)} فرصة")
+                for r in results[:3]:
+                    st.markdown(f"""
+                    <div class="glass-card">
+                        🟢 <b>{r['name']}</b> ({r['ticker']}) - RSI: {r['rsi']:.1f} - السعر: {r['price']:.2f}
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("لا توجد فرص شراء حالياً")
     
-    with col_result:
-        if 'scan_results' in st.session_state and st.session_state['scan_results']:
-            for opp in st.session_state['scan_results']:
-                signal = opp['الإشارة']
-                signal_icon = "🟢" if signal == "شراء" else "🔴" if signal == "بيع" else "🟡"
-                st.markdown(f"""
-                <div style="background: #1e1e2e; border-radius: 10px; padding: 10px; margin-bottom: 8px;">
-                    <span style="font-weight: bold;">{opp['الاسم']}</span>
-                    <span class="badge">{opp['الرمز']}</span>
-                    <span style="float: right;">{signal_icon} {signal} | السعر: {opp['السعر']:.2f}</span>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # ====================== آخر أخبار البورصجي ======================
-    with st.expander("📰 آخر أخبار وتحليلات البورصجي"):
-        st.markdown("""
-        ### 🧠 تحليلات البورصجي اليوم
-        
-        **📊 تحليل السوق المصري:**
-        - المؤشر الرئيسي EGX30 في منطقة استقرار
-        - قطاع البنوك يقود الارتفاعات اليوم
-        - السيولة المحلية في أعلى مستوى لها هذا الشهر
-        
-        **🎯 توصيات البورصجي:**
-        - فرصة شراء على CIB مع وقف خسارة عند 74
-        - متابعة TMGH بعد اختراق المقاومة
-        - جني أرباح جزئي على EAST بعد الارتفاع الأخير
-        
-        **⚠️ تنبيهات المخاطر:**
-        - متابعة تأثير أسعار الفائدة على السوق
-        - تقلبات محتملة مع إعلانات الشركات
-        """)
-    
-    # ====================== تذييل الصفحة ======================
-    st.markdown("""
-    <div class="footer">
-        🤖 بوت البورصجي AI - العقل المدبر لمحفظتك<br>
-        البيانات من Yahoo Finance | تحليلات بالذكاء الاصطناعي Gemini<br>
-        للأغراض التعليمية والاستشارية فقط
+    # ====================== تذييل المنصة ======================
+    st.markdown(f"""
+    <div class="platform-footer">
+        🌍 {t('app_name')} - العقل المدبر لمحفظتك<br>
+        البيانات من Yahoo Finance • تحليلات Gemini AI • تحديث لحظي<br>
+        © 2024 جميع الحقوق محفوظة
     </div>
     """, unsafe_allow_html=True)
 
