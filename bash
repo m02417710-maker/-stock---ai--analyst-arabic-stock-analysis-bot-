@@ -9,3 +9,15 @@ pip install -r requirements.txt
 
 # 4. تشغيل التطبيق
 streamlit run app.py
+# 1. حذف الملفات المكررة
+rm -f engines.py intelligence.py scanner.py run_local_scanner.py clock.py bash yaml
+rm -rf devcontainer database test
+
+# 2. تحديث git
+git add .
+git commit -m "Clean up project structure - remove duplicate files"
+git push origin main
+
+# 3. التشغيل محلياً
+pip install -r requirements.txt
+streamlit run app.py
