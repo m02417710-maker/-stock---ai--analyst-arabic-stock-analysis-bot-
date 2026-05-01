@@ -1,146 +1,286 @@
-# database.py - قاعدة البيانات المركزية (موسعة بالشركات)
-"""
-النسخة الموسعة من قاعدة البيانات
-تحتوي على جميع الأسهم المصرية والسعودية والعالمية
-"""
+# database.py - إدارة قاعدة البيانات المتكاملة
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Optional
+import pandas as pd
+from config import DATA_DIR
 
-# ====================== تعريف الأسواق والأسهم ======================
-MARKETS_DATA = {
-    # ========== البورصة المصرية (EGX) - أكثر من 60 شركة ==========
-    "EGX": {
-        "label": "🇪🇬 البورصة المصرية",
-        "suffix": ".CA",
-        "timezone": "Africa/Cairo",
-        "currency": "EGP",
-        "market_hours": "10:00 - 14:30",
-        "description": "أكبر بورصة في شمال أفريقيا",
-        "stocks": {
-            # البنوك (10 شركات)
-            "البنك التجاري الدولي (CIB)": "COMI.CA",
-            "بنك مصر": "BMEL.CA",
-            "بنك الإسكندرية": "ALEX.CA",
-            "البنك الأهلي الكويتي": "ALCN.CA",
-            "بنك التعمير والإسكان": "HDBK.CA",
-            "بنك قناة السويس": "CSBK.CA",
-            "البنك العربي الأفريقي": "AAIB.CA",
-            "بنك فيصل الإسلامي": "FAIT.CA",
-            "بنك بلوم": "BLOOM.CA",
-            "البنك العقاري المصري": "MHRB.CA",
-            
-            # العقارات والإنشاءات (15 شركة)
-            "طلعت مصطفى القابضة": "TMGH.CA",
-            "بالم هيلز للتعمير": "PHDC.CA",
-            "السادس من أكتوبر للتنمية": "OCDI.CA",
-            "مدينة نصر للإسكان": "MNHD.CA",
-            "العربية للاستثمار والتطوير": "AIND.CA",
-            "القاهرة الجديدة للإسكان": "NCAD.CA",
-            "الإسكندرية للإنشاءات": "ALEX.CA",
-            "مصر للاستثمار العقاري": "MIR.CA",
-            "بورتوفو للتنمية العقارية": "PORT.CA",
-            "العقارية للاستثمار": "ALLI.CA",
-            "مشروع البطس للتنمية": "PAT.CA",
-            "الإسماعيلية للتطوير العقاري": "ISMA.CA",
-            "العبور للاستثمار العقاري": "OBUR.CA",
-            "الشرق للتنمية العمرانية": "ESDC.CA",
-            "بعد للتنمية": "BAAD.CA",
-            
-            # المواد الغذائية والزراعة (12 شركة)
-            "الشرقية للدخان (إيسترن)": "EAST.CA",
-            "أبو قير للأسمدة": "ABUK.CA",
-            "مصر لإنتاج الأسمدة (موبكو)": "MFPC.CA",
-            "سكر الحدود": "SUGR.CA",
-            "القلعة للصناعات": "CCAP.CA",
-            "النيل للأغذية": "NILE.CA",
-            "المصرية للأغذية": "FOOD.CA",
-            "العربية للحوم": "ALC.CA",
-            "المنتجات الغذائية": "GFI.CA",
-            "مطاحن ومخابز شمال القاهرة": "MILS.CA",
-            "مطاحن مصر الوسطى": "MILS.CA",
-            "مطاحن جنوب القاهرة": "MILS.CA",
-            
-            # الاتصالات وتكنولوجيا المعلومات (8 شركات)
-            "تليكوم مصر": "ETEL.CA",
-            "المصرية للاتصالات": "ETEL.CA",
-            "فوري لتكنولوجيا البنوك": "FWRY.CA",
-            "Raya Holding": "RAYA.CA",
-            "أكت فاينانس": "ACTF.CA",
-            "أي فاينانس": "EIF.CA",
-            "أسيوط للاتصالات": "ASCO.CA",
-            "مصر للأنظمة": "SYS.CA",
-            
-            # الصناعة (15 شركة)
-            "السويدي إليكتريك": "SWDY.CA",
-            "مصر للألومنيوم": "EGAL.CA",
-            "الحديد والصلب المصرية": "IRON.CA",
-            "الإسكندرية للحديد والصلب": "ALEX.CA",
-            "النصر للكيماويات": "NCCM.CA",
-            "سيدبك": "SKPC.CA",
-            "الإسكندرية للأسمدة": "AFRI.CA",
-            "مصر للأسمدة": "MFPC.CA",
-            "النصر للصناعات الإلكترونية": "EMCO.CA",
-            "النساجون الشرقيون": "ORWE.CA",
-            "مصر للنسيج": "EGTX.CA",
-            "كتامة للصناعات": "KCCM.CA",
-            "الإسكندرية للغزل": "ALEX.CA",
-            "المحلة الكبرى للغزل": "MAHL.CA",
-            "مصر للبترول": "PETR.CA",
-            
-            # الأدوية (8 شركات)
-            "المصرية للمستحضرات الطبية": "EGPC.CA",
-            "أكتوفيرم": "ACTO.CA",
-            "جايبكو": "GPC.CA",
-            "العربية للأدوية": "ADCI.CA",
-            "النصر للأدوية": "NATC.CA",
-            "ممفيس للأدوية": "MEMF.CA",
-            "الإسكندرية للأدوية": "ALEX.CA",
-            "الدلتا للأدوية": "DELTA.CA",
-            
-            # السياحة والفنادق (5 شركات)
-            "أوراسكوم للفنادق": "ORHD.CA",
-            "فنادق الإسكندرية": "ALEX.CA",
-            "فنادق القاهرة": "CAIR.CA",
-            "فنادق شيراتون": "SHE.CA",
-            "فنادق هيلتون": "HILT.CA",
-        }
-    },
-    
-    # ========== باقي الأسواق كما هي (تداول، أبوظبي، دبي، أمريكا) ==========
-    # ... (أضف باقي الأسواق كما في الإصدار السابق)
-}
+DB_PATH = DATA_DIR / "boursagi.db"
 
-# دوال مساعدة (نفس الإصدار السابق مع تحسينات)
-def get_all_stocks() -> dict:
-    """جلب جميع الأسهم من جميع الأسواق"""
-    all_stocks = {}
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            full_name = f"{market_data['label']} - {stock_name}"
-            all_stocks[full_name] = {
-                'ticker': stock_ticker,
-                'market': market_key,
-                'suffix': market_data.get('suffix', ''),
-                'currency': market_data.get('currency', ''),
-                'market_name': market_data['label']
-            }
-    return all_stocks
+def init_database():
+    """تهيئة جميع جداول قاعدة البيانات"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # جدول الصفقات
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            entry_price REAL NOT NULL,
+            target_price REAL NOT NULL,
+            stop_loss REAL NOT NULL,
+            trailing_stop REAL DEFAULT 0,
+            quantity INTEGER NOT NULL,
+            sector TEXT,
+            date TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            current_price REAL,
+            profit_pct REAL DEFAULT 0,
+            highest_price REAL,
+            notes TEXT
+        )
+    ''')
+    
+    # جدول سجل التنبيهات
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS alerts_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trade_id INTEGER,
+            alert_type TEXT,
+            message TEXT,
+            timestamp TEXT,
+            is_sent INTEGER DEFAULT 0,
+            FOREIGN KEY (trade_id) REFERENCES trades(id)
+        )
+    ''')
+    
+    # جدول إحصائيات الأداء
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS performance_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT UNIQUE,
+            total_invested REAL,
+            total_current REAL,
+            total_profit REAL,
+            profit_pct REAL,
+            win_rate REAL,
+            trades_count INTEGER,
+            winning_trades INTEGER
+        )
+    ''')
+    
+    # جدول إعدادات المستخدم
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    
+    # إعدادات افتراضية
+    set_default_settings()
 
-def search_stock(keyword: str) -> dict:
-    """البحث المتقدم عن سهم"""
-    results = {}
-    keyword_lower = keyword.lower()
+def set_default_settings():
+    """تعيين الإعدادات الافتراضية"""
+    default_settings = {
+        "capital": "100000",
+        "risk_percent": "2.0",
+        "auto_trailing": "true",
+        "daily_alerts": "true",
+        "telegram_enabled": "false"
+    }
     
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            if (keyword_lower in stock_name.lower() or 
-                keyword_lower in stock_ticker.lower() or
-                keyword_lower in market_data.get('label', '').lower()):
-                full_name = f"{market_data['label']} - {stock_name}"
-                results[full_name] = {
-                    'ticker': stock_ticker,
-                    'market': market_key,
-                    'currency': market_data.get('currency', ''),
-                    'suffix': market_data.get('suffix', ''),
-                    'market_label': market_data['label']
-                }
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
     
-    return results
+    for key, value in default_settings.items():
+        cursor.execute('''
+            INSERT OR IGNORE INTO user_settings (key, value, updated_at)
+            VALUES (?, ?, ?)
+        ''', (key, value, datetime.now().isoformat()))
+    
+    conn.commit()
+    conn.close()
+
+def get_setting(key: str, default: str = None) -> str:
+    """الحصول على إعداد معين"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM user_settings WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else default
+
+def update_setting(key: str, value: str):
+    """تحديث إعداد معين"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+        VALUES (?, ?, ?)
+    ''', (key, value, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+# ====================== دوال الصفقات ======================
+
+def save_trade(trade: Dict) -> int:
+    """حفظ صفقة جديدة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO trades (symbol, entry_price, target_price, stop_loss, trailing_stop, 
+                           quantity, sector, date, status, highest_price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        trade["symbol"], trade["entry_price"], trade["target_price"],
+        trade["stop_loss"], trade.get("trailing_stop", 0),
+        trade["quantity"], trade.get("sector", ""), trade["date"],
+        "active", trade["entry_price"]
+    ))
+    trade_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return trade_id
+
+def load_trades(status: str = "active") -> List[Dict]:
+    """تحميل الصفقات"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    if status == "all":
+        cursor.execute('SELECT * FROM trades ORDER BY id DESC')
+    else:
+        cursor.execute('SELECT * FROM trades WHERE status = ? ORDER BY id DESC', (status,))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    trades = []
+    for row in rows:
+        trades.append({
+            "id": row[0], "symbol": row[1], "entry_price": row[2],
+            "target_price": row[3], "stop_loss": row[4], "trailing_stop": row[5] if row[5] else 0,
+            "quantity": row[6], "sector": row[7], "date": row[8],
+            "status": row[9], "current_price": row[10] if row[10] else row[2],
+            "profit_pct": row[11] if row[11] else 0,
+            "highest_price": row[12] if row[12] else row[2],
+            "notes": row[13] if len(row) > 13 else ""
+        })
+    return trades
+
+def update_trade(trade_id: int, **kwargs):
+    """تحديث بيانات صفقة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    for key, value in kwargs.items():
+        if key in ["target_price", "stop_loss", "notes", "status"]:
+            cursor.execute(f'UPDATE trades SET {key} = ? WHERE id = ?', (value, trade_id))
+    
+    conn.commit()
+    conn.close()
+
+def delete_trade(trade_id: int):
+    """حذف صفقة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM trades WHERE id = ?', (trade_id,))
+    conn.commit()
+    conn.close()
+
+def close_trade(trade_id: int, exit_price: float):
+    """إغلاق صفقة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # جلب بيانات الصفقة
+    cursor.execute('SELECT entry_price, quantity FROM trades WHERE id = ?', (trade_id,))
+    row = cursor.fetchone()
+    
+    if row:
+        entry_price, quantity = row
+        profit = (exit_price - entry_price) * quantity
+        profit_pct = ((exit_price - entry_price) / entry_price) * 100
+        
+        cursor.execute('''
+            UPDATE trades SET status = 'closed', current_price = ?, profit_pct = ? WHERE id = ?
+        ''', (exit_price, profit_pct, trade_id))
+        
+        # تسجيل الإغلاق في سجل التنبيهات
+        cursor.execute('''
+            INSERT INTO alerts_log (trade_id, alert_type, message, timestamp, is_sent)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (trade_id, "close", f"تم إغلاق الصفقة بربح {profit_pct:+.1f}%", 
+              datetime.now().isoformat(), 1))
+    
+    conn.commit()
+    conn.close()
+
+# ====================== دوال التنبيهات ======================
+
+def add_alert(trade_id: int, alert_type: str, message: str):
+    """إضافة تنبيه جديد"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO alerts_log (trade_id, alert_type, message, timestamp, is_sent)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (trade_id, alert_type, message, datetime.now().isoformat(), 0))
+    conn.commit()
+    conn.close()
+
+def get_pending_alerts() -> List[Dict]:
+    """الحصول على التنبيهات غير المرسلة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, trade_id, alert_type, message, timestamp 
+        FROM alerts_log WHERE is_sent = 0 ORDER BY timestamp
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [{"id": r[0], "trade_id": r[1], "type": r[2], "message": r[3], "timestamp": r[4]} for r in rows]
+
+def mark_alert_sent(alert_id: int):
+    """تحديد تنبيه كمرسل"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE alerts_log SET is_sent = 1 WHERE id = ?', (alert_id,))
+    conn.commit()
+    conn.close()
+
+# ====================== دوال الإحصائيات ======================
+
+def save_daily_stats():
+    """حفظ إحصائيات اليوم"""
+    trades = load_trades("all")
+    if not trades:
+        return
+    
+    total_invested = sum(t["entry_price"] * t["quantity"] for t in trades)
+    total_current = sum(t.get("current_price", t["entry_price"]) * t["quantity"] for t in trades)
+    total_profit = total_current - total_invested
+    profit_pct = (total_profit / total_invested) * 100 if total_invested > 0 else 0
+    
+    winning_trades = len([t for t in trades if t.get("profit_pct", 0) > 0])
+    win_rate = (winning_trades / len(trades)) * 100 if trades else 0
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO performance_stats (date, total_invested, total_current, 
+                    total_profit, profit_pct, win_rate, trades_count, winning_trades)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (datetime.now().strftime("%Y-%m-%d"), total_invested, total_current,
+          total_profit, profit_pct, win_rate, len(trades), winning_trades))
+    conn.commit()
+    conn.close()
+
+def get_performance_history(days: int = 30) -> pd.DataFrame:
+    """الحصول على تاريخ الأداء"""
+    conn = sqlite3.connect(DB_PATH)
+    query = f"SELECT * FROM performance_stats ORDER BY date DESC LIMIT {days}"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return df
+
+# تهيئة قاعدة البيانات عند الاستيراد
+init_database()
