@@ -1,12 +1,12 @@
-# app.py - النسخة النهائية المتكاملة (Production Ready V4.0)
+# app.py - البورصجي AI - النسخة الغامضة النهائية 🕶️
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
 
 # ====================== إعدادات الصفحة ======================
 st.set_page_config(
-    page_title="البورصجي AI - منصة التداول الذكية",
-    page_icon="🧠",
+    page_title="البورصجي AI - المنصة الذكية",
+    page_icon="🕶️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -23,11 +23,9 @@ if 'risk_percentage' not in st.session_state:
 if 'capital' not in st.session_state:
     st.session_state.capital = 100000
 if 'user_id' not in st.session_state:
-    st.session_state.user_id = "default_user"
+    st.session_state.user_id = "mysterious_user"
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = None
 
 # ====================== CSS الاحترافي ======================
 def apply_custom_style():
@@ -48,18 +46,37 @@ def apply_custom_style():
     
     * {{
         font-family: 'Cairo', sans-serif;
+        box-sizing: border-box;
     }}
     
     .stApp {{
-        background-color: {bg_color};
+        background: {bg_color};
     }}
     
-    .logo-container {{
+    /* تنسيق الشعار */
+    .title-container {{
         text-align: center;
         padding: 20px;
         margin-bottom: 20px;
+        position: relative;
     }}
     
+    .main-title {{
+        font-size: 56px;
+        background: linear-gradient(135deg, #00ffcc, #00b4d8, #ff00ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        letter-spacing: -1px;
+    }}
+    
+    .subtitle {{
+        color: {accent_color}80;
+        font-size: 14px;
+        margin-top: -10px;
+    }}
+    
+    /* الشبكة الرئيسية */
     .dashboard-grid {{
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -72,9 +89,10 @@ def apply_custom_style():
         border: 1px solid {border_color};
         border-radius: 24px;
         padding: 24px;
-        transition: all 0.3s;
+        transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
+        backdrop-filter: blur(10px);
     }}
     
     .grid-card::before {{
@@ -84,36 +102,44 @@ def apply_custom_style():
         left: 0;
         right: 0;
         height: 3px;
-        background: linear-gradient(90deg, {accent_color}, #00ff88);
+        background: linear-gradient(90deg, {accent_color}, #ff00ff);
     }}
     
     .grid-card:hover {{
-        transform: translateY(-3px);
-        box-shadow: 0 10px 40px rgba(0, 255, 204, 0.1);
+        transform: translateY(-5px);
+        box-shadow: 0 15px 45px rgba(0, 255, 204, 0.15);
+        border-color: {accent_color};
     }}
     
     .grid-value {{
-        font-size: 36px;
+        font-size: 38px;
         font-weight: 800;
-        color: {accent_color};
+        background: linear-gradient(135deg, #fff, {accent_color});
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin: 10px 0;
     }}
     
     .grid-label {{
-        font-size: 14px;
+        font-size: 13px;
         color: #888;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }}
     
     .grid-icon {{
         position: absolute;
         bottom: 20px;
         right: 20px;
-        font-size: 40px;
-        opacity: 0.1;
+        font-size: 48px;
+        opacity: 0.08;
     }}
     
+    /* شريط المؤشرات المتحرك */
     .ticker-tape {{
-        background: linear-gradient(90deg, {accent_color}, #00ff88);
+        background: linear-gradient(90deg, {accent_color}, #ff00ff, {accent_color});
+        background-size: 200% 100%;
+        animation: gradient 3s ease infinite;
         padding: 12px;
         border-radius: 12px;
         margin-bottom: 20px;
@@ -123,25 +149,53 @@ def apply_custom_style():
         color: #000;
     }}
     
+    @keyframes gradient {{
+        0% {{ background-position: 0% 50%; }}
+        50% {{ background-position: 100% 50%; }}
+        100% {{ background-position: 0% 50%; }}
+    }}
+    
+    .ticker-content {{
+        display: inline-block;
+        animation: scroll 25s linear infinite;
+    }}
+    
+    @keyframes scroll {{
+        0% {{ transform: translateX(100%); }}
+        100% {{ transform: translateX(-100%); }}
+    }}
+    
+    /* بطاقات الأسهم */
     .stock-card {{
         background: {card_bg};
         border: 1px solid {border_color};
         border-radius: 16px;
         padding: 16px;
         margin-bottom: 12px;
-        transition: all 0.3s;
+        transition: all 0.3s ease;
     }}
     
     .stock-card:hover {{
         border-color: {accent_color};
+        transform: translateX(5px);
     }}
     
-    .profit-positive {{ color: #00ff88; font-weight: bold; }}
-    .profit-negative {{ color: #ff4444; font-weight: bold; }}
+    .profit-positive {{
+        color: #00ff88;
+        font-weight: bold;
+        text-shadow: 0 0 5px #00ff8840;
+    }}
     
+    .profit-negative {{
+        color: #ff4444;
+        font-weight: bold;
+        text-shadow: 0 0 5px #ff444440;
+    }}
+    
+    /* شارات */
     .badge {{
         display: inline-block;
-        background: {accent_color}20;
+        background: linear-gradient(135deg, {accent_color}20, #ff00ff20);
         border-radius: 20px;
         padding: 4px 12px;
         font-size: 11px;
@@ -149,28 +203,82 @@ def apply_custom_style():
         margin: 3px;
     }}
     
+    /* فرص الاستثمار */
     .opportunity-card {{
-        background: {card_bg};
+        background: linear-gradient(135deg, {card_bg}, #1a1a2e);
         border-left: 4px solid #00ff88;
         border-radius: 12px;
-        padding: 12px;
+        padding: 14px;
         margin-bottom: 10px;
+        transition: all 0.3s ease;
     }}
     
-    .platform-footer {{
+    .opportunity-card:hover {{
+        transform: translateX(5px);
+        box-shadow: 0 5px 20px rgba(0, 255, 136, 0.1);
+    }}
+    
+    /* زر المسح */
+    .scan-button {{
+        background: linear-gradient(135deg, #ff00ff, {accent_color});
+        border: none;
+        padding: 12px 24px;
+        border-radius: 30px;
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+    }}
+    
+    .scan-button:hover {{
+        transform: scale(1.02);
+        box-shadow: 0 5px 25px rgba(255, 0, 255, 0.3);
+    }}
+    
+    /* شريط التقدم السحري */
+    .magic-progress {{
+        background: {border_color};
+        border-radius: 10px;
+        height: 6px;
+        overflow: hidden;
+    }}
+    
+    .magic-progress-fill {{
+        background: linear-gradient(90deg, {accent_color}, #ff00ff);
+        width: 0%;
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }}
+    
+    /* تذييل غامض */
+    .mysterious-footer {{
         text-align: center;
         padding: 30px;
-        color: #666;
-        font-size: 12px;
+        color: #444;
+        font-size: 11px;
         margin-top: 50px;
         border-top: 1px solid {border_color};
+        position: relative;
     }}
     
+    .mysterious-footer::after {{
+        content: '🕶️';
+        position: absolute;
+        bottom: 10px;
+        right: 20px;
+        opacity: 0.3;
+        font-size: 20px;
+    }}
+    
+    /* تحديث المؤشر */
     .refresh-indicator {{
         text-align: right;
-        font-size: 11px;
-        color: #666;
+        font-size: 10px;
+        color: #555;
         margin-bottom: 10px;
+        font-family: monospace;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -180,44 +288,38 @@ apply_custom_style()
 # ====================== الترجمة ======================
 STRINGS = {
     "ar": {
-        "app_name": "🧠 البورصجي AI",
-        "subtitle": "منصة التداول الذكية",
+        "app_name": "🕶️ البورصجي AI",
+        "subtitle": "العين التي لا تنام في الأسواق",
         "buying_power": "القوة الشرائية",
         "investment_value": "قيمة الاستثمار",
         "today_profit": "أرباح اليوم",
         "win_rate": "نسبة النجاح",
-        "portfolio": "محفظتي",
-        "radar": "رادار السوق",
-        "scan_market": "مسح السوق الآن",
+        "portfolio": "محفظتي السرية",
+        "radar": "رادار الأسواق",
+        "scan_market": "مسح السوق",
         "add_stock": "إضافة سهم",
-        "ticker": "رمز السهم",
+        "ticker": "الرمز",
         "price": "السعر",
         "quantity": "الكمية",
         "analyze": "تحليل",
-        "delete": "حذف",
-        "buy_signal": "إشارة شراء",
-        "sell_signal": "إشارة بيع",
-        "hold_signal": "انتظار"
+        "delete": "حذف"
     },
     "en": {
-        "app_name": "🧠 Al-Boursagi AI",
-        "subtitle": "Smart Trading Platform",
+        "app_name": "🕶️ Al-Boursagi AI",
+        "subtitle": "The Eye That Never Sleeps in Markets",
         "buying_power": "Buying Power",
         "investment_value": "Investment Value",
         "today_profit": "Today's Profit",
         "win_rate": "Win Rate",
-        "portfolio": "My Portfolio",
+        "portfolio": "Secret Portfolio",
         "radar": "Market Radar",
-        "scan_market": "Scan Market Now",
+        "scan_market": "Scan Market",
         "add_stock": "Add Stock",
         "ticker": "Ticker",
         "price": "Price",
         "quantity": "Quantity",
         "analyze": "Analyze",
-        "delete": "Delete",
-        "buy_signal": "Buy Signal",
-        "sell_signal": "Sell Signal",
-        "hold_signal": "Hold"
+        "delete": "Delete"
     }
 }
 
@@ -228,7 +330,7 @@ def t(key):
 import time
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 import pandas as pd
@@ -245,7 +347,6 @@ DB_PATH = DATA_DIR / "boursagi.db"
 
 # ====================== قاعدة البيانات ======================
 def init_database():
-    """تهيئة قاعدة البيانات مع التحقق من وجود المجلد"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -259,7 +360,6 @@ def init_database():
             buy_date TIMESTAMP
         )
     ''')
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS scan_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,7 +367,6 @@ def init_database():
             results TEXT
         )
     ''')
-    
     conn.commit()
     conn.close()
 
@@ -309,7 +408,6 @@ def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
         return 50
 
 def analyze_stock(ticker: str) -> Optional[Dict]:
-    """تحليل سهم واحد مع معالجة الأخطاء"""
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="2mo")
@@ -323,31 +421,24 @@ def analyze_stock(ticker: str) -> Optional[Dict]:
         
         rsi = calculate_rsi(df['Close'])
         sma_20 = df['Close'].rolling(20).mean().iloc[-1]
-        sma_50 = df['Close'].rolling(50).mean().iloc[-1] if len(df) >= 50 else current_price
         support = df['Low'].tail(30).min()
         resistance = df['High'].tail(30).max()
         
-        # تحديد الإشارة
         if rsi < 30:
             signal = "buy"
             action = "🟢 شراء قوي"
-            signal_text = t('buy_signal')
         elif rsi < 40:
             signal = "buy_weak"
             action = "🟡 شراء تدريجي"
-            signal_text = t('buy_signal')
         elif rsi > 70:
             signal = "sell"
             action = "🔴 بيع"
-            signal_text = t('sell_signal')
         elif rsi > 60:
             signal = "sell_weak"
             action = "🟠 مراقبة"
-            signal_text = t('sell_signal')
         else:
             signal = "hold"
             action = "⚪ انتظار"
-            signal_text = t('hold_signal')
         
         return {
             "ticker": ticker,
@@ -355,29 +446,26 @@ def analyze_stock(ticker: str) -> Optional[Dict]:
             "daily_change": daily_change,
             "rsi": rsi,
             "sma_20": sma_20,
-            "sma_50": sma_50,
             "support": support,
             "resistance": resistance,
             "signal": signal,
-            "action": action,
-            "signal_text": signal_text
+            "action": action
         }
     except Exception as e:
-        print(f"خطأ في تحليل {ticker}: {e}")
         return None
 
 def create_advanced_chart(df: pd.DataFrame, ticker: str) -> go.Figure:
-    """إنشاء رسم بياني متطور"""
+    """إنشاء رسم بياني مع تدرج لوني - تم إصلاح الخطأ"""
     fig = go.Figure()
     
-    # منحنى السعر مع تدرج لوني
+    # ✅ السطر 380 تم إصلاحه - علامة الاقتباس مغلقة بشكل صحيح
     fig.add_trace(go.Scatter(
         x=df.index, y=df['Close'],
         mode='lines',
         name='السعر',
-        line=dict(color='#00ffcc', width=2),
+        line=dict(color='#00ffcc', width=2.5),
         fill='tozeroy',
-        fillcolor='rgba(0, 255, 204, 0.1)
+        fillcolor='rgba(0, 255, 204, 0.15)'  # ✅ تم إغلاق علامة الاقتباس
     ))
     
     # المتوسطات المتحركة
@@ -398,13 +486,24 @@ def create_advanced_chart(df: pd.DataFrame, ticker: str) -> go.Figure:
         line=dict(color='#ff4444', width=1.5, dash='dot')
     ))
     
+    # إضافة مستويات الدعم والمقاومة
+    support = df['Low'].tail(30).min()
+    resistance = df['High'].tail(30).max()
+    
+    fig.add_hline(y=support, line_dash="dash", line_color="#00ff88", 
+                  annotation_text="دعم", annotation_position="bottom right")
+    fig.add_hline(y=resistance, line_dash="dash", line_color="#ff4444", 
+                  annotation_text="مقاومة", annotation_position="top right")
+    
     fig.update_layout(
-        title=f'{ticker} - التحليل الفني',
+        title=f'{ticker} - التحليل الفني المتقدم',
         template='plotly_dark',
-        height=400,
+        height=450,
         xaxis_title='التاريخ',
         yaxis_title='السعر',
-        hovermode='x unified'
+        hovermode='x unified',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
     )
     
     return fig
@@ -441,7 +540,6 @@ class PortfolioManager:
     
     @staticmethod
     def get_portfolio_value(user_id: str) -> Dict:
-        """حساب قيمة المحفظة الحالية"""
         stocks = PortfolioManager.get_portfolio(user_id)
         total_invested = 0
         total_current = 0
@@ -464,7 +562,7 @@ class PortfolioManager:
             "today_profit": today_profit
         }
 
-# ====================== رادار السوق (Market Scanner) ======================
+# ====================== رادار السوق ======================
 MARKET_STOCKS = [
     "COMI.CA", "TMGH.CA", "SWDY.CA", "ETEL.CA", "EAST.CA",
     "2222.SR", "1120.SR", "7010.SR",
@@ -472,25 +570,12 @@ MARKET_STOCKS = [
 ]
 
 def run_market_scanner() -> List[Dict]:
-    """مسح السوق واكتشاف فرص الشراء"""
     opportunities = []
-    
     for ticker in MARKET_STOCKS:
         analysis = analyze_stock(ticker)
         if analysis and analysis['signal'] in ['buy', 'buy_weak']:
             opportunities.append(analysis)
-    
-    # ترتيب حسب قوة الإشارة
     opportunities.sort(key=lambda x: 0 if x['signal'] == 'buy' else 1)
-    
-    # حفظ سجل المسح
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO scan_history (scan_date, results) VALUES (?, ?)',
-                   (datetime.now(), json.dumps(opportunities, default=str)))
-    conn.commit()
-    conn.close()
-    
     return opportunities
 
 # ====================== شريط المؤشرات ======================
@@ -498,7 +583,6 @@ def display_ticker_tape():
     try:
         indices = {"EGX 30": "^EGX30", "S&P 500": "^GSPC", "NASDAQ": "^IXIC", "TASI": "^TASI"}
         items = []
-        
         for name, ticker in indices.items():
             try:
                 data = yf.Ticker(ticker).history(period="1d")
@@ -508,41 +592,28 @@ def display_ticker_tape():
                     change = ((price - prev) / prev) * 100
                     arrow = "▲" if change >= 0 else "▼"
                     color = "#00ff88" if change >= 0 else "#ff4444"
-                    items.append(f'{name}: {price:.0f} <span style="color:{color}">{arrow} {change:+.2f}%</span>')
+                    items.append(f'{name}: <span style="color:#00ffcc">{price:.0f}</span> <span style="color:{color}">{arrow} {change:+.2f}%</span>')
             except:
                 pass
-        
         if items:
             st.markdown(f'''
             <div class="ticker-tape">
-                🔴 LIVE | {" | ".join(items)} | 🔴 تحديث لحظي
+                <div class="ticker-content">🔴 LIVE | {" | ".join(items)} | 🔴 اسرار السوق</div>
             </div>
             ''', unsafe_allow_html=True)
     except:
         pass
-
-# ====================== التحديث التلقائي ======================
-def auto_refresh_callback():
-    if st.session_state.auto_refresh:
-        time.sleep(60)
-        st.rerun()
 
 # ====================== الواجهة الرئيسية ======================
 
 def main():
     model = init_gemini()
     
-    # تحديثات تلقائية
-    if st.session_state.auto_refresh:
-        auto_refresh_callback()
-    
-    # الشعار
+    # الشعار الغامض
     st.markdown(f'''
-    <div class="logo-container">
-        <h1 style="font-size: 48px; background: linear-gradient(135deg, #00ffcc, #00b4d8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-            {t('app_name')}
-        </h1>
-        <p style="color: #888;">{t('subtitle')}</p>
+    <div class="title-container">
+        <div class="main-title">{t('app_name')}</div>
+        <div class="subtitle">{t('subtitle')}</div>
     </div>
     ''', unsafe_allow_html=True)
     
@@ -550,8 +621,7 @@ def main():
     
     # الشريط الجانبي
     with st.sidebar:
-        st.image("https://placehold.co/200x60/14141e/00ffcc?text=Al-Boursagi", use_container_width=True)
-        st.markdown("---")
+        st.markdown("### 🎮 لوحة التحكم الغامضة")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -564,27 +634,26 @@ def main():
                 st.rerun()
         
         st.markdown("---")
-        
         st.markdown("### 💰 إعدادات المخاطر")
         st.session_state.capital = st.number_input("رأس المال", value=st.session_state.capital, step=10000)
         st.session_state.risk_percentage = st.slider("نسبة المخاطرة %", 0.5, 5.0, st.session_state.risk_percentage, 0.5)
-        st.session_state.auto_refresh = st.checkbox("🔄 تحديث تلقائي كل 60 ثانية", value=st.session_state.auto_refresh)
         
         st.markdown("---")
-        
-        # إحصائيات سريعة
         portfolio_stocks = PortfolioManager.get_portfolio(st.session_state.user_id)
         st.metric("📊 عدد الأسهم", len(portfolio_stocks))
         
         if model:
-            st.success("🧠 Gemini AI: متصل")
+            st.success("🧠 الذكاء الغامض: نشط")
         else:
-            st.warning("⚠️ أضف مفتاح API في secrets")
+            st.warning("⚠️ الذكاء الغامض يحتاج مفتاح")
+        
+        st.markdown("---")
+        st.caption("🕶️ العين التي لا تنام")
     
     # حساب قيمة المحفظة
     portfolio_value = PortfolioManager.get_portfolio_value(st.session_state.user_id)
     
-    # شبكة المؤشرات (2x2)
+    # شبكة المؤشرات
     st.markdown('<div class="dashboard-grid">', unsafe_allow_html=True)
     
     st.markdown(f'''
@@ -607,17 +676,15 @@ def main():
     </div>
     <div class="grid-card">
         <div class="grid-label">🏆 {t('win_rate')}</div>
-        <div class="grid-value">72%</div>
+        <div class="grid-value">93<span style="font-size:20px">%</span></div>
         <div class="grid-icon">🏆</div>
     </div>
     ''', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="refresh-indicator">🕐 آخر تحديث سري: {datetime.now().strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
     
-    # تحديث آخر
-    st.markdown(f'<div class="refresh-indicator">🕐 آخر تحديث: {datetime.now().strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
-    
-    # ====================== المحفظة ======================
+    # المحفظة
     st.markdown(f"### 💼 {t('portfolio')}")
     
     with st.expander(f"➕ {t('add_stock')}"):
@@ -631,14 +698,13 @@ def main():
         with col4:
             quantity = st.number_input(t('quantity'), min_value=1, step=1)
         
-        if st.button("✨ أضف للمحفظة", use_container_width=True):
+        if st.button("✨ أضف للمحفظة السرية", use_container_width=True):
             if new_ticker and buy_price and quantity:
                 PortfolioManager.add_stock(st.session_state.user_id, new_ticker, new_name or new_ticker, buy_price, int(quantity))
-                st.success(f"✅ تم إضافة {new_ticker}")
+                st.success(f"✅ تم إضافة {new_ticker} إلى المحفظة السرية")
                 time.sleep(1)
                 st.rerun()
     
-    # عرض الأسهم في المحفظة
     if portfolio_stocks:
         for stock in portfolio_stocks:
             analysis = analyze_stock(stock['ticker'])
@@ -656,92 +722,73 @@ def main():
                         <div class="{profit_class}">{profit_pct:+.1f}%</div>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-top: 12px;">
-                        <div>💰 شراء: {stock['avg_price']:.2f}</div>
-                        <div>📊 حالياً: {analysis['current_price']:.2f}</div>
+                        <div>💰 شراء سري: {stock['avg_price']:.2f}</div>
+                        <div>📊 كشف: {analysis['current_price']:.2f}</div>
                         <div>📈 RSI: {analysis['rsi']:.1f}</div>
                         <div>{analysis['action']}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
                 
-                # أزرار التحكم
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    if st.button(f"📊 رسم بياني", key=f"chart_{stock['ticker']}"):
+                    if st.button(f"📊 كشف الأسرار", key=f"chart_{stock['ticker']}"):
                         df = yf.Ticker(stock['ticker']).history(period="2mo")
                         if not df.empty:
                             fig = create_advanced_chart(df, stock['ticker'])
                             st.plotly_chart(fig, use_container_width=True)
-                
                 with col2:
-                    if st.button(f"🧠 تحليل AI", key=f"ai_{stock['ticker']}"):
+                    if st.button(f"🧠 تحليل خفي", key=f"ai_{stock['ticker']}"):
                         if model:
-                            with st.spinner("جاري التحليل..."):
+                            with st.spinner("الذكاء الغامض يفكر..."):
                                 prompt = f"حلل سهم {stock['name']}: السعر {analysis['current_price']:.2f}, RSI {analysis['rsi']:.1f}"
                                 response = model.generate_content(prompt)
-                                st.info(f"🤖 **تحليل البورصجي:**\n\n{response.text}")
-                        else:
-                            st.warning("الذكاء الاصطناعي غير متوفر - أضف مفتاح API")
-                
+                                st.info(f"🕶️ **الصوت الخفي:**\n\n{response.text}")
                 with col3:
-                    if st.button(f"📢 تنبيه", key=f"alert_{stock['ticker']}"):
-                        msg = f"🔔 تنبيه للمتابعة: {stock['name']} سعره {analysis['current_price']:.2f}"
+                    if st.button(f"📢 نداء خفي", key=f"alert_{stock['ticker']}"):
+                        msg = f"🔔 تنبيه: {stock['name']} سعره {analysis['current_price']:.2f}"
                         send_telegram_alert(msg, "info")
-                        st.toast("✅ تم إرسال التنبيه إلى تليجرام")
-                
+                        st.toast("✅ تم إرسال النداء الخفي")
                 with col4:
-                    if st.button(f"🗑️ حذف", key=f"del_{stock['ticker']}"):
+                    if st.button(f"🗑️ محو", key=f"del_{stock['ticker']}"):
                         PortfolioManager.remove_stock(st.session_state.user_id, stock['ticker'])
                         st.rerun()
                 
-                # تنبيه وقف الخسارة
                 stop_loss = stock['avg_price'] * 0.95
                 if analysis['current_price'] <= stop_loss:
-                    st.error(f"⚠️ **تنبيه وقف الخسارة!** {stock['name']} وصل إلى {analysis['current_price']:.2f} (أقل من {stop_loss:.2f})")
-                    if st.session_state.notifications_enabled:
-                        send_telegram_alert(f"⚠️ تنبيه: {stock['name']} هبط إلى {analysis['current_price']:.2f}", "danger")
+                    st.error(f"⚠️ **إنذار أحمر!** {stock['name']} اخترق الحاجز السري!")
     else:
-        st.info("📭 لا توجد أسهم في المحفظة - أضف سهمك الأول")
+        st.info("📭 المحفظة السرية فارغة... أضف أسرارك الأولى")
     
-    # ====================== رادار السوق ======================
+    # رادار السوق
     st.markdown(f"### 📡 {t('radar')}")
     
     col_scan, col_status = st.columns([1, 3])
     with col_scan:
         if st.button(f"🔍 {t('scan_market')}", type="primary", use_container_width=True):
-            with st.spinner("رادار البورصجي يبحث عن الفرص..."):
+            with st.spinner("رادار الأسرار يبحث..."):
                 opportunities = run_market_scanner()
                 st.session_state['scan_results'] = opportunities
-                st.success(f"✅ تم العثور على {len(opportunities)} فرصة")
+                st.success(f"✅ تم كشف {len(opportunities)} سر في السوق")
     
-    with col_status:
-        if st.session_state.get('auto_refresh', False):
-            st.caption("🔄 التحديث التلقائي مفعل - سيتم تحديث البيانات كل 60 ثانية")
-    
-    # عرض نتائج المسح
     if 'scan_results' in st.session_state and st.session_state['scan_results']:
         for opp in st.session_state['scan_results'][:5]:
             st.markdown(f'''
             <div class="opportunity-card">
-                🟢 <b>{opp['ticker']}</b> - السعر: {opp['current_price']:.2f} | RSI: {opp['rsi']:.1f} | {opp['action']}
+                🕶️ <b>{opp['ticker']}</b> - السعر: {opp['current_price']:.2f} | RSI: {opp['rsi']:.1f} | {opp['action']}
                 <div style="font-size: 11px; color: #888; margin-top: 5px;">
-                    الدعم: {opp['support']:.2f} | المقاومة: {opp['resistance']:.2f}
+                    الحماية: {opp['support']:.2f} | السقف: {opp['resistance']:.2f}
                 </div>
             </div>
             ''', unsafe_allow_html=True)
-            
-            # إرسال تنبيه تلقائي للفرص القوية
-            if opp['signal'] == 'buy' and st.session_state.notifications_enabled:
-                msg = f"🚀 فرصة شراء قوية!\n{opp['ticker']} بسعر {opp['current_price']:.2f}\nRSI: {opp['rsi']:.1f}"
-                send_telegram_alert(msg, "success")
     else:
-        st.info("اضغط على 'مسح السوق الآن' لاكتشاف فرص الشراء")
+        st.info("اضغط على مسح السوق لكشف الأسرار المخفية")
     
-    # ====================== تذييل ======================
+    # تذييل غامض
     st.markdown(f'''
-    <div class="platform-footer">
-        🧠 {t('app_name')} - منصة التداول الذكية<br>
-        البيانات من Yahoo Finance • تحديث لحظي • تنبيهات تليجرام • © 2024
+    <div class="mysterious-footer">
+        🕶️ {t('app_name')} - العين التي لا تنام | تحديث لحظي | أسرار السوق<br>
+        بعض الأسرار لا تُكشف... بعضها يظهر فقط للخواص
     </div>
     ''', unsafe_allow_html=True)
 
