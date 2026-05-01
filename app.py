@@ -1,14 +1,10 @@
 # ============================================================
-# app.py - الواجهة الرئيسية (مصححة)
+# app.py - الواجهة الرئيسية (نسخة بسيطة ومضمونة)
 # ============================================================
 
 import streamlit as st
-import core  # استيراد الملف كاملاً
+import core
 from datetime import datetime
-
-# ============================================================
-# إعدادات الصفحة
-# ============================================================
 
 st.set_page_config(
     page_title="المحلل المالي المتكامل",
@@ -17,25 +13,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# نص الواجهة
-# ============================================================
-
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-}
-[data-testid="stMetric"] {
-    background: #1e293b;
-    border: 1px solid #10b981;
-    border-radius: 15px;
-    padding: 15px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# الشريط الجانبي
+# واجهة جانبية
 # ============================================================
 
 with st.sidebar:
@@ -47,7 +25,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # استخدام core.STOCKS مباشرة
+    # استخدام STOCKS من core
     selected = st.selectbox("🔍 اختر السهم", list(core.STOCKS.keys()))
     ticker = core.STOCKS[selected]
     
@@ -60,26 +38,26 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
-# جلب البيانات
+# العنوان
 # ============================================================
 
 st.markdown(f"## تحليل {selected}")
 st.markdown("---")
 
+# ============================================================
+# جلب البيانات
+# ============================================================
+
 with st.spinner("جاري التحليل..."):
     df, info = core.get_data(ticker)
 
 if df is not None and not df.empty:
-    # التحليل
     score, signals, rec, color = core.analyze(df)
     current = df['Close'].iloc[-1]
     prev = df['Close'].iloc[-2] if len(df) > 1 else current
     change = ((current - prev) / prev) * 100
     
-    # مونت كارلو
     mc = core.monte_carlo_gbm(df)
-    
-    # إدارة المخاطر
     shares, position, actual_risk, advice = core.risk_management(capital, current, 5, risk_pct)
     
     # بطاقات
@@ -100,11 +78,7 @@ if df is not None and not df.empty:
     
     # التوصية
     st.markdown(f"""
-    <div style="background: #1e293b;
-                border: 2px solid {color};
-                border-radius: 20px;
-                padding: 20px;
-                text-align: center;">
+    <div style="background: #1e293b; border: 2px solid {color}; border-radius: 20px; padding: 20px; text-align: center;">
         <h2 style="color: {color};">{rec}</h2>
         <p>🎯 هدف: {df['Resistance'].iloc[-1]:.2f} | 🛑 وقف: {current * 0.95:.2f}</p>
     </div>
