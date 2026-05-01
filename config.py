@@ -1,4 +1,9 @@
 # config.py - الإعدادات المركزية للمشروع
+"""
+البورصجي AI - نظام إدارة المخاطر المتكامل
+النسخة: 5.0.0
+"""
+
 import os
 from pathlib import Path
 from datetime import datetime
@@ -10,7 +15,7 @@ LOGS_DIR = BASE_DIR / "logs"
 REPORTS_DIR = BASE_DIR / "reports"
 CACHE_DIR = BASE_DIR / "cache"
 
-# إنشاء المجلدات
+# إنشاء المجلدات تلقائياً
 for dir_path in [DATA_DIR, LOGS_DIR, REPORTS_DIR, CACHE_DIR]:
     dir_path.mkdir(exist_ok=True)
 
@@ -18,8 +23,8 @@ for dir_path in [DATA_DIR, LOGS_DIR, REPORTS_DIR, CACHE_DIR]:
 APP_CONFIG = {
     "name": "البورصجي AI",
     "version": "5.0.0",
-    "author": "البورصجي AI Team",
-    "description": "منصة التداول الذكية المتكاملة",
+    "author": "البورصجي AI تيم",
+    "description": "منصة التداول الذكية المتكاملة - العقل المدبر لإدارة المخاطر",
     "default_period": "1y",
     "refresh_seconds": 60,
     "max_trades": 100,
@@ -32,8 +37,8 @@ RISK_CONFIG = {
     "min_risk_reward_ratio": 1.5,
     "ideal_risk_reward_ratio": 2.0,
     "trailing_stop_default": 5.0,
-    "max_position_size": 0.25,
-    "daily_loss_limit": 5.0
+    "max_position_size": 0.25,      # 25% كحد أقصى من رأس المال
+    "daily_loss_limit": 5.0          # 5% خسارة يومية كحد أقصى
 }
 
 # ====================== إعدادات المؤشرات الفنية ======================
@@ -78,7 +83,7 @@ SUPPORTED_MARKETS = {
 
 # ====================== دوال مساعدة ======================
 def get_market_flag(ticker: str) -> str:
-    """تحديد علم السوق تلقائياً"""
+    """تحديد علم السوق تلقائياً بناءً على رمز السهم"""
     if ".CA" in ticker:
         return "🇪🇬"
     elif ".SR" in ticker:
@@ -87,11 +92,15 @@ def get_market_flag(ticker: str) -> str:
         return "🇺🇸"
 
 def get_flexible_ticker(symbol: str) -> str:
-    """دعم مرن لجميع الأسواق"""
+    """دعم مرن لجميع الأسواق - إضافة اللاحقة المناسبة تلقائياً"""
     if "." in symbol:
         return symbol
     return f"{symbol}.CA"
 
-def get_current_time():
-    """الحصول على الوقت الحالي"""
+def get_current_time() -> str:
+    """الحصول على الوقت الحالي بتنسيق مناسب"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def get_current_date() -> str:
+    """الحصول على التاريخ الحالي"""
+    return datetime.now().strftime("%Y-%m-%d")
