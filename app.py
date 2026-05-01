@@ -1,11 +1,15 @@
 # ============================================================
-# app.py - الواجهة الرئيسية (بصياغات عربية محسّنة)
+# app.py - الواجهة الرئيسية للنظام
+# الإصدار: 4.0 - النهائي
 # ============================================================
 
 import streamlit as st
 from datetime import datetime
-from core import *
-from strings import UI_TEXT, RECOMMENDATIONS
+from core import (
+    get_data, analyze, monte_carlo_gbm, create_chart, 
+    risk_management, scan_market_parallel, STOCKS
+)
+from strings import UI_TEXT
 
 # ============================================================
 # إعدادات الصفحة
@@ -34,38 +38,42 @@ st.markdown("""
     padding: 15px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-.main-card {
-    background-color: #1e293b;
-    border-radius: 15px;
+.golden-signal {
+    background: linear-gradient(135deg, #064e3b, #065f46);
+    border: 2px solid #10b981;
+    border-radius: 20px;
     padding: 20px;
-    margin-bottom: 20px;
-}
-.main-header {
-    background: linear-gradient(135deg, #10b981, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     text-align: center;
-    font-size: 2rem;
-    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# الشريط الجانبي (Sidebar)
+# الشريط الجانبي
 # ============================================================
 
 with st.sidebar:
-    st.markdown(f'<p class="main-header">{UI_TEXT["app_title"]}</p>', unsafe_allow_html=True)
+    st.markdown(f"# {UI_TEXT['app_title']}")
     st.markdown("---")
     
     st.markdown(f"### {UI_TEXT['sidebar_capital']}")
-    capital = st.number_input(UI_TEXT["sidebar_capital_label"], min_value=100, value=10000, step=1000)
-    risk_percent = st.slider(UI_TEXT["sidebar_risk_label"], 0.5, 5.0, 2.0, 0.5)
+    capital = st.number_input(
+        UI_TEXT["sidebar_capital_label"], 
+        min_value=100, 
+        value=10000, 
+        step=1000
+    )
+    risk_percent = st.slider(
+        UI_TEXT["sidebar_risk_label"], 
+        0.5, 5.0, 2.0, 0.5
+    )
     
     st.markdown("---")
     
-    selected_name = st.selectbox("🔍 اختر السهم للتحليل", list(STOCKS.keys()))
+    selected_name = st.selectbox(
+        "🔍 اختر السهم", 
+        list(STOCKS.keys())
+    )
     ticker = STOCKS[selected_name]
     
     st.caption(f"📌 الرمز: `{ticker}`")
@@ -81,14 +89,20 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
-# جلب البيانات والتحليل
+# العنوان الرئيسي وجلب البيانات
 # ============================================================
+
+st.markdown(f"## {UI_TEXT['page_title'].format(selected=selected_name)}")
+st.markdown("---")
 
 with st.spinner("🔄 جاري تحليل البيانات..."):
     df, info = get_data(ticker)
 
 if df is not None and not df.empty:
+    # ============================================================
     # التحليل الأساسي
+    # ============================================================
+    
     score, signals, recommendation, rec_color = analyze(df)
     current_price = df['Close'].iloc[-1]
     prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
@@ -99,19 +113,13 @@ if df is not None and not df.empty:
         mc = monte_carlo_gbm(df)
     
     # إدارة المخاطر
-    shares, position, actual_risk, risk_advice = risk_management(capital, current_price, 5, risk_percent)
+    shares, position, actual_risk, risk_advice = risk_management(
+        capital, current_price, 5, risk_percent
+    )
     
     # الأهداف
     target_price = df['Resistance'].iloc[-1] if not pd.isna(df['Resistance'].iloc[-1]) else current_price * 1.07
     stop_price = current_price * 0.95
-    
-    # ============================================================
-    # العنوان الرئيسي
-    # ============================================================
-    
-    st.markdown(f"## {UI_TEXT['page_title'].format(selected=selected_name)}")
-    st.markdown(f"### {UI_TEXT['ticker_label'].format(ticker=ticker)}")
-    st.markdown("---")
     
     # ============================================================
     # بطاقات المؤشرات
@@ -136,26 +144,38 @@ if df is not None and not df.empty:
     # بطاقة التوصية
     # ============================================================
     
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
-                border: 2px solid {rec_color};
-                border-radius: 20px; padding: 20px;
-                text-align: center; margin: 15px 0;">
-        <h2 style="color: {rec_color}; margin: 0;">{UI_TEXT['recommendation_title']}</h2>
-        <h1 style="color: {rec_color}; margin: 8px 0 0 0;">{recommendation}</h1>
-        <p style="color: #94a3b8; margin-top: 10px;">
-            {UI_TEXT['price_info'].format(stop=stop_price, target=target_price)}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    if score >= 4:
+        st.markdown(f"""
+        <div class="golden-signal">
+            <h1 style="color: #10b981; margin: 0;">✨ إشارة ذهبية ✨</h1>
+            <h2 style="color: #10b981;">{recommendation}</h2>
+            <p style="color: #d1d5db;">
+                🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
+                    border: 2px solid {rec_color};
+                    border-radius: 20px; padding: 20px;
+                    text-align: center; margin: 15px 0;">
+            <h2 style="color: {rec_color};">{recommendation}</h2>
+            <p>🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}</p>
+            <p style="font-size: 12px;">{risk_advice}</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # ============================================================
     # التبويبات
     # ============================================================
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        UI_TEXT["tab_chart"], UI_TEXT["tab_analysis"], 
-        UI_TEXT["tab_forecast"], UI_TEXT["tab_risk"], UI_TEXT["tab_scanner"]
+        UI_TEXT["tab_chart"], 
+        UI_TEXT["tab_analysis"], 
+        UI_TEXT["tab_forecast"],
+        UI_TEXT["tab_risk"], 
+        UI_TEXT["tab_scanner"]
     ])
     
     with tab1:
@@ -187,8 +207,6 @@ if df is not None and not df.empty:
             if stop_price != current_price:
                 ratio = (current_price * 1.07 - current_price) / (current_price - stop_price)
                 st.markdown(f"**{UI_TEXT['analysis_risk_reward']}:** 1:{ratio:.1f}")
-            else:
-                st.markdown(f"**{UI_TEXT['analysis_risk_reward']}:** غير متاح")
     
     with tab3:
         if mc:
@@ -207,13 +225,19 @@ if df is not None and not df.empty:
             st.markdown("---")
             if mc['profit_prob'] > 60:
                 assessment = UI_TEXT['forecast_good']
-                st.success(UI_TEXT['forecast_analysis_profit'].format(prob=mc['profit_prob'], assessment=assessment))
+                st.success(UI_TEXT['forecast_analysis_profit'].format(
+                    prob=mc['profit_prob'], assessment=assessment
+                ))
             elif mc['profit_prob'] > 45:
                 assessment = UI_TEXT['forecast_average']
-                st.warning(UI_TEXT['forecast_analysis_profit'].format(prob=mc['profit_prob'], assessment=assessment))
+                st.warning(UI_TEXT['forecast_analysis_profit'].format(
+                    prob=mc['profit_prob'], assessment=assessment
+                ))
             else:
                 assessment = UI_TEXT['forecast_caution']
-                st.error(UI_TEXT['forecast_analysis_profit'].format(prob=mc['profit_prob'], assessment=assessment))
+                st.error(UI_TEXT['forecast_analysis_profit'].format(
+                    prob=mc['profit_prob'], assessment=assessment
+                ))
         else:
             st.warning("بيانات غير كافية لتشغيل محاكاة مونت كارلو")
     
@@ -237,7 +261,9 @@ if df is not None and not df.empty:
         if shares == 0:
             st.warning(UI_TEXT['risk_warning_invalid'])
         elif actual_risk > risk_percent:
-            st.error(UI_TEXT['risk_warning_exceed'].format(actual=actual_risk, allowed=risk_percent))
+            st.error(UI_TEXT['risk_warning_exceed'].format(
+                actual=actual_risk, allowed=risk_percent
+            ))
         else:
             st.success(risk_advice)
         
@@ -254,8 +280,6 @@ if df is not None and not df.empty:
                 results = scan_market_parallel()
                 if not results.empty:
                     st.success(UI_TEXT['scanner_success'].format(count=len(results)))
-                    
-                    # عرض النتائج في جدول
                     st.dataframe(results, use_container_width=True, hide_index=True)
                     
                     st.markdown("---")
@@ -263,9 +287,9 @@ if df is not None and not df.empty:
                     top5 = results.head(5)
                     for _, row in top5.iterrows():
                         if "شراء" in row['التوصية']:
-                            st.success(f"📈 **{row['السهم']}** - {row['التوصية']} | السعر: {row['السعر']} | RSI: {row['RSI']} | الدرجة: {row['الدرجة']}/5")
+                            st.success(f"📈 **{row['السهم']}** - {row['التوصية']} | السعر: {row['السعر']} | RSI: {row['RSI']}")
                         else:
-                            st.info(f"📊 **{row['السهم']}** - {row['التوصية']} | السعر: {row['السعر']} | RSI: {row['RSI']}")
+                            st.info(f"📊 **{row['السهم']}** - {row['التوصية']} | السعر: {row['السعر']}")
                 else:
                     st.warning(UI_TEXT['scanner_no_data'])
 
@@ -281,6 +305,6 @@ st.markdown("---")
 st.markdown(f"""
 <div style="text-align: center; color: #64748b; font-size: 12px;">
     🚀 {UI_TEXT['footer']}<br>
-    🔄 تحديث تلقائي كل 5 دقائق | 📈 جميع البورصات (مصر - السعودية - أمريكا)
+    🔄 تحديث تلقائي كل 5 دقائق | 📈 جميع البورصات
 </div>
 """, unsafe_allow_html=True)
