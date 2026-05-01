@@ -1,37 +1,18 @@
+cat > .gitignore << 'EOF'
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
+*.pyc
+*.pyo
+.env
 venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+env/
 
 # Streamlit
-.streamlit/secrets.toml
-.streamlit/config.toml
+.streamlit/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # OS
 .DS_Store
@@ -39,18 +20,4 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
-
-# Data
-*.db
-*.sqlite
-*.sqlite3
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# GitHub Actions
-.github/workflows/*.yml
-!.github/workflows/scanner.yml
+EOF
