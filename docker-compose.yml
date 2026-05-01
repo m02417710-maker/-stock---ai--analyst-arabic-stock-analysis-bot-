@@ -1,19 +1,23 @@
+# ============================================================
+# docker-compose.yml - تشغيل التطبيق مع إعادة تشغيل تلقائي
+# ============================================================
+
 version: '3.8'
 
 services:
-  streamlit-app:
+  stock-analyzer:
     build: .
+    container_name: stock_analyzer_pro
     ports:
       - "8501:8501"
+    restart: unless-stopped
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
-  
-  background-scanner:
-    build: .
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-    command: python run_local_scanner.py
-    restart: always
+      - TZ=Africa/Cairo
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
