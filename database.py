@@ -1,19 +1,26 @@
 # database.py - إدارة قاعدة البيانات المتكاملة
+"""
+نظام إدارة قاعدة بيانات البورصجي AI
+يدعم SQLite للتخزين المحلي
+"""
+
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import pandas as pd
 from config import DATA_DIR
 
 DB_PATH = DATA_DIR / "boursagi.db"
+
+# ====================== تهيئة قاعدة البيانات ======================
 
 def init_database():
     """تهيئة جميع جداول قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # جدول الصفقات
+    # جدول الصفقات - تخزين جميع صفقات المستخدم
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +40,7 @@ def init_database():
         )
     ''')
     
-    # جدول سجل التنبيهات
+    # جدول سجل التنبيهات - تسجيل جميع التنبيهات المرسلة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS alerts_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,11 +48,12 @@ def init_database():
             alert_type TEXT,
             message TEXT,
             timestamp TEXT,
-            is_sent INTEGER DEFAULT 0
+            is_sent INTEGER DEFAULT 0,
+            FOREIGN KEY (trade_id) REFERENCES trades(id)
         )
     ''')
     
-    # جدول إحصائيات الأداء
+    # جدول إحصائيات الأداء - لحفظ الإحصائيات اليومية
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS performance_stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +68,7 @@ def init_database():
         )
     ''')
     
-    # جدول إعدادات المستخدم
+    # جدول إعدادات المستخدم - تخزين تفضيلات المستخدم
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_settings (
             key TEXT PRIMARY KEY,
@@ -72,11 +80,11 @@ def init_database():
     conn.commit()
     conn.close()
     
-    # إعدادات افتراضية
+    # تعيين الإعدادات الافتراضية
     _set_default_settings()
 
 def _set_default_settings():
-    """تعيين الإعدادات الافتراضية"""
+    """تعيين الإعدادات الافتراضية للمستخدم"""
     default_settings = {
         "capital": "100000",
         "risk_percent": "2.0",
@@ -97,8 +105,10 @@ def _set_default_settings():
     conn.commit()
     conn.close()
 
-def get_setting(key: str, default: str = None) -> str:
-    """الحصول على إعداد معين"""
+# ====================== دوال إعدادات المستخدم ======================
+
+def get_setting(key: str, default: str = None) -> Optional[str]:
+    """الحصول على إعداد معين من قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT value FROM user_settings WHERE key = ?', (key,))
@@ -107,7 +117,7 @@ def get_setting(key: str, default: str = None) -> str:
     return row[0] if row else default
 
 def update_setting(key: str, value: str):
-    """تحديث إعداد معين"""
+    """تحديث إعداد معين في قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -117,29 +127,36 @@ def update_setting(key: str, value: str):
     conn.commit()
     conn.close()
 
-# ====================== دوال الصفقات ======================
+# ====================== دوال إدارة الصفقات ======================
 
-def save_trade(trade: Dict) -> int:
-    """حفظ صفقة جديدة"""
+def save_trade(trade: Dict[str, Any]) -> int:
+    """حفظ صفقة جديدة في قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO trades (symbol, entry_price, target_price, stop_loss, trailing_stop, 
-                           quantity, sector, date, status, highest_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (
+            symbol, entry_price, target_price, stop_loss, trailing_stop, 
+            quantity, sector, date, status, highest_price
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        trade["symbol"], trade["entry_price"], trade["target_price"],
-        trade["stop_loss"], trade.get("trailing_stop", 0),
-        trade["quantity"], trade.get("sector", ""), trade["date"],
-        "active", trade["entry_price"]
+        trade["symbol"], 
+        trade["entry_price"], 
+        trade["target_price"],
+        trade["stop_loss"], 
+        trade.get("trailing_stop", 0),
+        trade["quantity"], 
+        trade.get("sector", ""), 
+        trade["date"],
+        "active", 
+        trade["entry_price"]
     ))
     trade_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return trade_id
 
-def load_trades(status: str = "active") -> List[Dict]:
-    """تحميل الصفقات"""
+def load_trades(status: str = "active") -> List[Dict[str, Any]]:
+    """تحميل الصفقات من قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -151,11 +168,13 @@ def load_trades(status: str = "active") -> List[Dict]:
     rows = cursor.fetchall()
     conn.close()
     
-    trades = []
-    column_names = ['id', 'symbol', 'entry_price', 'target_price', 'stop_loss', 
-                    'trailing_stop', 'quantity', 'sector', 'date', 'status',
-                    'current_price', 'profit_pct', 'highest_price', 'notes']
+    column_names = [
+        'id', 'symbol', 'entry_price', 'target_price', 'stop_loss', 
+        'trailing_stop', 'quantity', 'sector', 'date', 'status',
+        'current_price', 'profit_pct', 'highest_price', 'notes'
+    ]
     
+    trades = []
     for row in rows:
         trade = {}
         for i, col in enumerate(column_names):
@@ -163,7 +182,7 @@ def load_trades(status: str = "active") -> List[Dict]:
                 trade[col] = row[i]
         trades.append(trade)
     
-    # تعيين القيم الافتراضية
+    # تعيين القيم الافتراضية للبيانات المفقودة
     for trade in trades:
         if trade.get('current_price') is None:
             trade['current_price'] = trade['entry_price']
@@ -175,20 +194,22 @@ def load_trades(status: str = "active") -> List[Dict]:
     return trades
 
 def update_trade(trade_id: int, **kwargs):
-    """تحديث بيانات صفقة"""
+    """تحديث بيانات صفقة معينة"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
+    allowed_fields = ['target_price', 'stop_loss', 'current_price', 
+                      'profit_pct', 'highest_price', 'notes', 'status']
+    
     for key, value in kwargs.items():
-        if key in ['target_price', 'stop_loss', 'current_price', 'profit_pct', 
-                   'highest_price', 'notes', 'status']:
+        if key in allowed_fields:
             cursor.execute(f'UPDATE trades SET {key} = ? WHERE id = ?', (value, trade_id))
     
     conn.commit()
     conn.close()
 
 def delete_trade(trade_id: int):
-    """حذف صفقة"""
+    """حذف صفقة من قاعدة البيانات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM trades WHERE id = ?', (trade_id,))
@@ -196,7 +217,7 @@ def delete_trade(trade_id: int):
     conn.close()
 
 def close_trade(trade_id: int, exit_price: float):
-    """إغلاق صفقة"""
+    """إغلاق صفقة وحساب الربح/الخسارة"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -212,6 +233,7 @@ def close_trade(trade_id: int, exit_price: float):
             UPDATE trades SET status = 'closed', current_price = ?, profit_pct = ? WHERE id = ?
         ''', (exit_price, profit_pct, trade_id))
         
+        # تسجيل حدث الإغلاق في سجل التنبيهات
         cursor.execute('''
             INSERT INTO alerts_log (trade_id, alert_type, message, timestamp, is_sent)
             VALUES (?, ?, ?, ?, ?)
@@ -222,7 +244,7 @@ def close_trade(trade_id: int, exit_price: float):
     conn.close()
 
 def add_alert(trade_id: int, alert_type: str, message: str):
-    """إضافة تنبيه جديد"""
+    """إضافة تنبيه جديد إلى سجل التنبيهات"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -231,3 +253,30 @@ def add_alert(trade_id: int, alert_type: str, message: str):
     ''', (trade_id, alert_type, message, datetime.now().isoformat(), 0))
     conn.commit()
     conn.close()
+
+def get_pending_alerts() -> List[Dict[str, Any]]:
+    """الحصول على التنبيهات غير المرسلة"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, trade_id, alert_type, message, timestamp 
+        FROM alerts_log WHERE is_sent = 0 ORDER BY timestamp
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [
+        {"id": r[0], "trade_id": r[1], "type": r[2], 
+         "message": r[3], "timestamp": r[4]} for r in rows
+    ]
+
+def mark_alert_sent(alert_id: int):
+    """تحديد تنبيه كمرسل"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE alerts_log SET is_sent = 1 WHERE id = ?', (alert_id,))
+    conn.commit()
+    conn.close()
+
+# تهيئة قاعدة البيانات عند استيراد الملف
+init_database()
