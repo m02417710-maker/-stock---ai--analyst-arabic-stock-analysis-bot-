@@ -1,4 +1,4 @@
-# borasjy_pro_terminal.py - بورصجي Pro Terminal (الإصدار النهائي)
+# borasjy_pro_terminal.py - بورصجي Pro Terminal (الإصدار النهائي المصحح)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -10,7 +10,6 @@ import warnings
 import time
 import requests
 import numpy as np
-from threading import Thread
 
 # إعدادات أساسية
 warnings.filterwarnings('ignore')
@@ -352,7 +351,7 @@ def get_ai_analysis(ticker, df, fundamentals, user_query=""):
     📋 البيانات الأساسية:
     - الاسم: {fundamentals.get('name', ticker) if fundamentals else ticker}
     - القطاع: {fundamentals.get('sector', 'غير محدد') if fundamentals else 'غير محدد'}
-    - القيمة السوقية: {fundamentals.get('market_cap', 0):,} if fundamentals else 'غير محدد'
+    - القيمة السوقية: {fundamentals.get('market_cap', 0):,} إذا كان fundamentals else 'غير محدد'
     - مكرر الربحية: {fundamentals.get('pe_ratio', 'N/A') if fundamentals else 'N/A'}
     
     بناءً على هذه البيانات، قم بتقديم:
@@ -386,7 +385,7 @@ TICKER_POOL = [
 # ====================== واجهة المستخدم الرئيسية ======================
 
 # الهيدر الاحترافي
-st.markdown("""
+st.markdown(f"""
 <div class="terminal-header">
     <div class="logo-area">
         <div>
@@ -396,8 +395,8 @@ st.markdown("""
         <div class="live-badge">LIVE</div>
     </div>
     <div style="display: flex; gap: 15px;">
-        <div style="font-size: 12px;">📅 """ + datetime.now().strftime("%Y-%m-%d") + """</div>
-        <div style="font-size: 12px;">🕐 """ + datetime.now().strftime("%H:%M:%S") + """</div>
+        <div style="font-size: 12px;">📅 {datetime.now().strftime("%Y-%m-%d")}</div>
+        <div style="font-size: 12px;">🕐 {datetime.now().strftime("%H:%M:%S")}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -464,14 +463,14 @@ with tabs[0]:
                     st.markdown(f"**{stock}** {status}")
                     st.caption(f"{current:.2f} ({change:+.2f}%)")
                 with col2:
-                    # Sparkline chart
+                    # Sparkline chart - ✅ تم إصلاح الخطأ هنا
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=data.index, y=data['Close'],
                         mode='lines',
                         line=dict(color='#00ffcc', width=1.5),
                         fill='tozeroy',
-                        fillcolor='rgba(0, 255, 204, 0.1)
+                        fillcolor='rgba(0, 255, 204, 0.1)'  # ✅ تم إغلاق علامة الاقتباس بشكل صحيح
                     ))
                     fig.update_layout(
                         height=50,
@@ -482,7 +481,7 @@ with tabs[0]:
                         plot_bgcolor='rgba(0,0,0,0)'
                     )
                     st.plotly_chart(fig, config={'displayModeBar': False}, use_container_width=True)
-        except:
+        except Exception as e:
             pass
 
 # ====================== Tab 2: التحليل العميق ======================
@@ -683,9 +682,8 @@ with tabs[3]:
     for source in news_sources:
         try:
             ticker = yf.Ticker(source)
-            news = ticker.news if hasattr(ticker, 'news') else []
-            if news:
-                for item in news[:3]:
+            if hasattr(ticker, 'news') and ticker.news:
+                for item in ticker.news[:2]:
                     st.markdown(f"""
                     <div class="stat-card" style="text-align: right; margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
