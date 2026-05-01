@@ -414,3 +414,107 @@ full_install() {
 main() {
     case "${1:-start}" in
         start|run|""
+# =============================================================================
+# بناء الصورة
+# =============================================================================
+
+# بناء الصورة الأساسية
+docker build -t boursagi-ai:latest .
+
+# بناء الصورة بدون cache
+docker build --no-cache -t boursagi-ai:latest .
+
+# بناء الصورة مع اسم محدد
+docker build -t boursagi-ai:v5.0.0 .
+
+# =============================================================================
+# تشغيل الحاوية
+# =============================================================================
+
+# التشغيل الأساسي
+docker run -d \
+  --name boursagi-ai \
+  -p 8501:8501 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  boursagi-ai:latest
+
+# التشغيل مع متغيرات البيئة
+docker run -d \
+  --name boursagi-ai \
+  -p 8501:8501 \
+  -e TZ=Africa/Cairo \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/.streamlit:/app/.streamlit \
+  --restart unless-stopped \
+  boursagi-ai:latest
+
+# =============================================================================
+# تشغيل باستخدام Docker Compose
+# =============================================================================
+
+# التشغيل الأساسي
+docker-compose up -d
+
+# التشغيل مع إعادة البناء
+docker-compose up -d --build
+
+# التشغيل مع الميزات المتقدمة (PostgreSQL + Redis)
+docker-compose --profile advanced up -d
+
+# إيقاف الخدمات
+docker-compose down
+
+# إيقاف وإزالة وحدات التخزين
+docker-compose down -v
+
+# عرض السجلات
+docker-compose logs -f boursagi-app
+
+# =============================================================================
+# إدارة الحاويات
+# =============================================================================
+
+# عرض الحاويات العاملة
+docker ps
+
+# عرض جميع الحاويات
+docker ps -a
+
+# إيقاف الحاوية
+docker stop boursagi-ai
+
+# تشغيل الحاوية المتوقفة
+docker start boursagi-ai
+
+# إعادة تشغيل الحاوية
+docker restart boursagi-ai
+
+# الدخول إلى الحاوية
+docker exec -it boursagi-ai /bin/bash
+
+# عرض سجلات الحاوية
+docker logs boursagi-ai
+
+# متابعة السجلات الحية
+docker logs -f boursagi-ai
+
+# =============================================================================
+# تنظيف Docker
+# =============================================================================
+
+# حذف الحاوية
+docker rm boursagi-ai
+
+# حذف الصورة
+docker rmi boursagi-ai:latest
+
+# حذف الحاويات غير المستخدمة
+docker container prune
+
+# حذف الصور غير المستخدمة
+docker image prune
+
+# تنظيف شامل
+docker system prune -a --volumes
