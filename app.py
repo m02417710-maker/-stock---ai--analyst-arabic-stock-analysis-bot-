@@ -1,66 +1,69 @@
-# app.py - التطبيق الرئيسي الكامل مع نظام التنبيهات للبيع والشراء
+# app.py - النسخة المتكاملة (الماسح التلقائي + التنبيهات + المحفظة + الذكاء الاصطناعي)
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
 
-# إعداد الصفحة أولاً
+# إعداد الصفحة
 st.set_page_config(
-    page_title="Stock AI Analyst Pro - نظام التنبيهات 📢",
-    page_icon="🔔",
+    page_title="العقل المدبر للأسهم 🧠",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ====================== التهيئة الأمنية ======================
-from security import initialize_security, validate_ticker, get_safe_ticker
-initialize_security()
-
 # ====================== الاستيرادات ======================
+import time
+import json
+import threading
+from datetime import datetime, timedelta
 from pathlib import Path
-import yfinance as yf
+from typing import Dict, List, Optional, Any
 import pandas as pd
 import numpy as np
+import yfinance as yf
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import google.generativeai as genai
-from datetime import datetime
-from typing import Dict, Optional, List
-import json
+import requests
 
-# استيراد core
-try:
-    import core
-    from core import STOCKS
-    STOCK_NAMES = list(STOCKS.keys()) if STOCKS else []
-except ImportError:
-    STOCKS = {
-        "🇪🇬 البنك التجاري الدولي (CIB)": "COMI.CA",
-        "🇸🇦 أرامكو السعودية": "2222.SR",
-        "🇺🇸 Apple Inc.": "AAPL"
-    }
-    STOCK_NAMES = list(STOCKS.keys())
+# ====================== التهيئة ======================
 
-# تعريف الإصدار
-try:
-    from config import APP_VERSION
-except ImportError:
-    APP_VERSION = "5.0.0"
+# إنشاء المجلدات اللازمة
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+
+# ملفات التخزين
+SCAN_RESULTS_FILE = DATA_DIR / "scan_results.json"
+PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
+ALERTS_FILE = DATA_DIR / "alerts.json"
 
 # ====================== إعداد Gemini ======================
 def init_gemini():
-    """تهيئة الذكاء الاصطناعي"""
     try:
         if "GEMINI_API_KEY" in st.secrets:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             return genai.GenerativeModel("gemini-1.5-flash")
-    except Exception:
+    except:
         pass
     return None
+
+# ====================== إعداد تليجرام ======================
+def send_telegram_alert(message: str):
+    """إرسال تنبيه عبر تليجرام"""
+    try:
+        if "TELEGRAM_BOT_TOKEN" in st.secrets and "TELEGRAM_CHAT_ID" in st.secrets:
+            token = st.secrets["TELEGRAM_BOT_TOKEN"]
+            chat_id = st.secrets["TELEGRAM_CHAT_ID"]
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+            response = requests.post(url, data=data, timeout=10)
+            return response.ok
+    except Exception as e:
+        print(f"Telegram error: {e}")
+    return False
 
 # ====================== دوال التحليل الفني ======================
 
 def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
-    """حساب مؤشر RSI"""
     try:
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -72,7 +75,6 @@ def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
         return 50
 
 def calculate_macd(prices: pd.Series):
-    """حساب مؤشر MACD"""
     try:
         ema_fast = prices.ewm(span=12, adjust=False).mean()
         ema_slow = prices.ewm(span=26, adjust=False).mean()
@@ -82,615 +84,601 @@ def calculate_macd(prices: pd.Series):
     except:
         return 0, 0
 
-def calculate_support_resistance(df: pd.DataFrame, lookback: int = 50):
-    """حساب مستويات الدعم والمقاومة"""
-    try:
-        recent_data = df.tail(lookback)
-        resistance = recent_data['High'].max()
-        support = recent_data['Low'].min()
-        return support, resistance
-    except:
-        return df['Low'].min(), df['High'].max()
-
-# ====================== نظام تنبيهات البيع والشراء ======================
-
-class TradingAlertSystem:
-    """
-    نظام متكامل لتنبيهات البيع والشراء
-    """
-    
-    def __init__(self):
-        # تهيئة سجل التنبيهات في session state
-        if 'buy_alerts' not in st.session_state:
-            st.session_state.buy_alerts = []
-        if 'sell_alerts' not in st.session_state:
-            st.session_state.sell_alerts = []
-        if 'all_alerts' not in st.session_state:
-            st.session_state.all_alerts = []
-    
-    def analyze_buy_signals(self, ticker: str, current_price: float, rsi: float, 
-                            macd: float, macd_signal: float, price_vs_sma: str,
-                            volume_ratio: float, trend: str) -> Dict:
-        """
-        تحليل إشارات الشراء
-        """
-        buy_signals = []
-        buy_score = 0
-        reasons = []
-        
-        # 1. إشارة RSI للشراء
-        if rsi < 30:
-            buy_score += 3
-            reasons.append(f"✅ RSI منخفض جداً ({rsi:.1f}) - منطقة ذروة بيع قوية")
-            buy_signals.append("RSI ذروة بيع")
-        elif rsi < 35:
-            buy_score += 2
-            reasons.append(f"📉 RSI منخفض ({rsi:.1f}) - فرصة شراء جيدة")
-            buy_signals.append("RSI منخفض")
-        elif rsi < 40:
-            buy_score += 1
-            reasons.append(f"📊 RSI في المنطقة المحايدة السفلية ({rsi:.1f})")
-        
-        # 2. إشارة MACD للشراء
-        if macd > macd_signal:
-            buy_score += 2
-            reasons.append("🟢 تقاطع MACD إيجابي - إشارة شراء")
-            buy_signals.append("MACD إيجابي")
-        
-        # 3. السعر أقل من المتوسطات
-        if price_vs_sma == "below":
-            buy_score += 1
-            reasons.append("📉 السعر أقل من المتوسط 20 - فرصة شراء")
-            buy_signals.append("سعر منخفض")
-        
-        # 4. حجم تداول إيجابي
-        if volume_ratio > 1.2:
-            buy_score += 1
-            reasons.append("📊 حجم تداول مرتفع - زخم إيجابي")
-        
-        # 5. الاتجاه الصاعد
-        if trend == "صاعد":
-            buy_score += 2
-            reasons.append("📈 اتجاه عام صاعد للسهم")
-        
-        # تحديد مستوى الإشارة
-        if buy_score >= 5:
-            signal_type = "🔴 إشارة شراء قوية جداً"
-            action = "شراء فوري 🟢"
-            confidence = "عالية جداً"
-            suggested_allocation = "15-20%"
-        elif buy_score >= 3:
-            signal_type = "🟠 إشارة شراء جيدة"
-            action = "شراء تدريجي 🟡"
-            confidence = "عالية"
-            suggested_allocation = "10-15%"
-        elif buy_score >= 2:
-            signal_type = "🟡 إشارة شراء ضعيفة"
-            action = "مراقبة فقط"
-            confidence = "متوسطة"
-            suggested_allocation = "5-10%"
-        else:
-            signal_type = "⚪ لا توجد إشارة شراء"
-            action = "انتظار"
-            confidence = "منخفضة"
-            suggested_allocation = "0%"
-        
-        return {
-            "signal": signal_type,
-            "action": action,
-            "score": buy_score,
-            "confidence": confidence,
-            "reasons": reasons,
-            "signals": buy_signals,
-            "suggested_allocation": suggested_allocation,
-            "timestamp": datetime.now()
-        }
-    
-    def analyze_sell_signals(self, ticker: str, current_price: float, rsi: float,
-                             macd: float, macd_signal: float, price_vs_sma: str,
-                             volume_ratio: float, trend: str) -> Dict:
-        """
-        تحليل إشارات البيع
-        """
-        sell_signals = []
-        sell_score = 0
-        reasons = []
-        
-        # 1. إشارة RSI للبيع
-        if rsi > 70:
-            sell_score += 3
-            reasons.append(f"🔴 RSI مرتفع جداً ({rsi:.1f}) - منطقة ذروة شراء خطيرة")
-            sell_signals.append("RSI ذروة شراء")
-        elif rsi > 65:
-            sell_score += 2
-            reasons.append(f"⚠️ RSI مرتفع ({rsi:.1f}) - احتمالية تصحيح")
-            sell_signals.append("RSI مرتفع")
-        elif rsi > 60:
-            sell_score += 1
-            reasons.append(f"📊 RSI في المنطقة العلوية ({rsi:.1f})")
-        
-        # 2. إشارة MACD للبيع
-        if macd < macd_signal:
-            sell_score += 2
-            reasons.append("🔴 تقاطع MACD سلبي - إشارة بيع")
-            sell_signals.append("MACD سلبي")
-        
-        # 3. السعر أعلى من المتوسطات (تمدد)
-        if price_vs_sma == "above":
-            sell_score += 1
-            reasons.append("📈 السعر أعلى من المتوسط 20 - احتمالية تصحيح")
-            sell_signals.append("تمدد سعري")
-        
-        # 4. حجم تداول مع انخفاض
-        if volume_ratio > 1.5 and price_vs_sma == "above":
-            sell_score += 1
-            reasons.append("⚠️ حجم تداول مرتفع مع قرب من المقاومة")
-        
-        # 5. الاتجاه الهابط
-        if trend == "هابط":
-            sell_score += 2
-            reasons.append("📉 اتجاه عام هابط للسهم")
-        
-        # تحديد مستوى الإشارة
-        if sell_score >= 5:
-            signal_type = "🔴 إشارة بيع قوية جداً"
-            action = "بيع فوري 🔴"
-            confidence = "عالية جداً"
-            reason_summary = "خطر كبير - يوصى بالخروج الفوري"
-        elif sell_score >= 3:
-            signal_type = "🟠 إشارة بيع"
-            action = "بيع جزئي 🟠"
-            confidence = "عالية"
-            reason_summary = "منطقة خطر - يوصى بتقليل المركز"
-        elif sell_score >= 2:
-            signal_type = "🟡 إشارة مراقبة"
-            action = "مراقبة كثيفة"
-            confidence = "متوسطة"
-            reason_summary = "علامات تحذير - راقب السهم عن كثب"
-        else:
-            signal_type = "🟢 لا توجد إشارة بيع"
-            action = "احتفظ بالسهم"
-            confidence = "منخفضة"
-            reason_summary = "لا توجد علامات خطر حالياً"
-        
-        return {
-            "signal": signal_type,
-            "action": action,
-            "score": sell_score,
-            "confidence": confidence,
-            "reasons": reasons,
-            "signals": sell_signals,
-            "reason_summary": reason_summary,
-            "timestamp": datetime.now()
-        }
-    
-    def get_overall_recommendation(self, buy_signal: Dict, sell_signal: Dict) -> Dict:
-        """
-        الحصول على التوصية النهائية
-        """
-        buy_score = buy_signal.get('score', 0)
-        sell_score = sell_signal.get('score', 0)
-        
-        if buy_score >= 3 and sell_score <= 1:
-            recommendation = "🟢 **شراء** - مؤشرات إيجابية قوية"
-            color = "green"
-            action = "شراء"
-            urgency = "عالي"
-        elif buy_score >= 2 and sell_score <= 2:
-            recommendation = "🟡 **شراء تدريجي** - مؤشرات إيجابية معقولة"
-            color = "yellow"
-            action = "شراء تدريجي"
-            urgency = "متوسط"
-        elif sell_score >= 3 and buy_score <= 1:
-            recommendation = "🔴 **بيع** - مؤشرات سلبية قوية"
-            color = "red"
-            action = "بيع"
-            urgency = "عالي"
-        elif sell_score >= 2:
-            recommendation = "🟠 **مراقبة** - علامات تحذير"
-            color = "orange"
-            action = "مراقبة"
-            urgency = "متوسط"
-        else:
-            recommendation = "⚪ **انتظار** - لا توجد إشارات واضحة"
-            color = "gray"
-            action = "انتظار"
-            urgency = "منخفض"
-        
-        return {
-            "recommendation": recommendation,
-            "color": color,
-            "action": action,
-            "urgency": urgency,
-            "buy_score": buy_score,
-            "sell_score": sell_score
-        }
-    
-    def add_alert_to_history(self, ticker: str, alert_type: str, signal: Dict, price: float):
-        """إضافة تنبيه إلى السجل"""
-        alert = {
-            "ticker": ticker,
-            "type": alert_type,
-            "signal": signal.get('signal', ''),
-            "action": signal.get('action', ''),
-            "price": price,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "reasons": signal.get('reasons', [])
-        }
-        
-        st.session_state.all_alerts.insert(0, alert)
-        
-        # الاحتفاظ فقط بآخر 50 تنبيه
-        if len(st.session_state.all_alerts) > 50:
-            st.session_state.all_alerts = st.session_state.all_alerts[:50]
-    
-    def display_alerts_panel(self):
-        """عرض لوحة التنبيهات"""
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("## 🔔 آخر التنبيهات")
-        
-        if st.session_state.all_alerts:
-            for alert in st.session_state.all_alerts[:5]:
-                if "شراء" in alert['action']:
-                    icon = "🟢"
-                    color = "#00ff00"
-                elif "بيع" in alert['action']:
-                    icon = "🔴"
-                    color = "#ff4444"
-                else:
-                    icon = "🟡"
-                    color = "#ffaa00"
-                
-                st.sidebar.markdown(f"""
-                <div style="
-                    background-color: #1e1e1e;
-                    border-left: 3px solid {color};
-                    padding: 8px;
-                    margin-bottom: 8px;
-                    border-radius: 5px;
-                ">
-                    <small>{icon} <strong>{alert['ticker']}</strong></small><br>
-                    <small style="color: {color};">{alert['action']}</small><br>
-                    <small style="color: #888;">{alert['timestamp'][:16]}</small>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if st.sidebar.button("🗑️ مسح التنبيهات", use_container_width=True):
-                st.session_state.all_alerts = []
-                st.rerun()
-        else:
-            st.sidebar.info("📭 لا توجد تنبيهات بعد")
-
-# ====================== دوال إضافية ======================
-
-@st.cache_data(ttl=300)
-def get_stock_data(ticker: str, period: str = "6mo"):
-    """جلب بيانات السهم"""
+def analyze_stock(ticker: str, name: str = "") -> Dict:
+    """تحليل شامل لسهم واحد"""
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period=period)
+        df = stock.history(period="3mo")
         
-        if df.empty:
-            return None, None
+        if df.empty or len(df) < 20:
+            return None
         
-        # حساب المؤشرات
-        df['SMA_20'] = df['Close'].rolling(20).mean()
-        df['RSI'] = calculate_rsi(df['Close'], 14)
+        current_price = df['Close'].iloc[-1]
+        prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
+        daily_change = ((current_price - prev_price) / prev_price) * 100
         
-        return df, stock.info
-    except Exception:
-        return None, None
+        rsi = calculate_rsi(df['Close'], 14)
+        macd, macd_signal = calculate_macd(df['Close'])
+        
+        # المتوسطات المتحركة
+        sma_20 = df['Close'].rolling(20).mean().iloc[-1]
+        sma_50 = df['Close'].rolling(50).mean().iloc[-1] if len(df) >= 50 else current_price
+        
+        # حجم التداول
+        avg_volume = df['Volume'].tail(20).mean()
+        volume_ratio = df['Volume'].iloc[-1] / avg_volume if avg_volume > 0 else 1
+        
+        # الدعم والمقاومة
+        support = df['Low'].tail(50).min()
+        resistance = df['High'].tail(50).max()
+        
+        # حساب نقاط الشراء والبيع
+        buy_score = 0
+        sell_score = 0
+        buy_reasons = []
+        sell_reasons = []
+        
+        # RSI Analysis
+        if rsi < 30:
+            buy_score += 3
+            buy_reasons.append(f"RSI منخفض ({rsi:.1f}) - ذروة بيع")
+        elif rsi < 35:
+            buy_score += 2
+            buy_reasons.append(f"RSI جيد للشراء ({rsi:.1f})")
+        elif rsi > 70:
+            sell_score += 3
+            sell_reasons.append(f"RSI مرتفع ({rsi:.1f}) - ذروة شراء")
+        elif rsi > 65:
+            sell_score += 2
+            sell_reasons.append(f"RSI في منطقة خطر ({rsi:.1f})")
+        
+        # MACD Analysis
+        if macd > macd_signal:
+            buy_score += 2
+            buy_reasons.append("MACD إيجابي - إشارة شراء")
+        else:
+            sell_score += 1
+            sell_reasons.append("MACD سلبي")
+        
+        # Price vs SMA
+        if current_price < sma_20:
+            buy_score += 1
+            buy_reasons.append("السعر أقل من المتوسط 20")
+        elif current_price > sma_20 * 1.1:
+            sell_score += 1
+            sell_reasons.append("السعر مرتفع عن المتوسط 20")
+        
+        # Volume
+        if volume_ratio > 1.5 and buy_score > 0:
+            buy_score += 1
+            buy_reasons.append("حجم تداول مرتفع يدعم الشراء")
+        
+        # تحديد التوصية
+        if buy_score >= 4:
+            recommendation = "BUY"
+            action = "🟢 شراء قوي"
+            confidence = "عالية"
+        elif buy_score >= 2:
+            recommendation = "BUY_WEAK"
+            action = "🟡 شراء تدريجي"
+            confidence = "متوسطة"
+        elif sell_score >= 4:
+            recommendation = "SELL"
+            action = "🔴 بيع"
+            confidence = "عالية"
+        elif sell_score >= 2:
+            recommendation = "SELL_WEAK"
+            action = "🟠 مراقبة"
+            confidence = "متوسطة"
+        else:
+            recommendation = "HOLD"
+            action = "⚪ انتظار"
+            confidence = "منخفضة"
+        
+        # جلب الأخبار للتحليل الأساسي
+        news = []
+        try:
+            if hasattr(stock, 'news') and stock.news:
+                for item in stock.news[:3]:
+                    news.append(item.get('title', ''))
+        except:
+            pass
+        
+        return {
+            "ticker": ticker,
+            "name": name,
+            "current_price": current_price,
+            "daily_change": daily_change,
+            "rsi": rsi,
+            "macd": macd,
+            "macd_signal": macd_signal,
+            "sma_20": sma_20,
+            "sma_50": sma_50,
+            "support": support,
+            "resistance": resistance,
+            "volume_ratio": volume_ratio,
+            "buy_score": buy_score,
+            "sell_score": sell_score,
+            "recommendation": recommendation,
+            "action": action,
+            "confidence": confidence,
+            "buy_reasons": buy_reasons,
+            "sell_reasons": sell_reasons,
+            "news": news,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return None
 
-# ====================== واجهة المستخدم الرئيسية ======================
+# ====================== الماسح التلقائي (Scanner) ======================
+
+def run_scanner(stocks_dict: Dict) -> List[Dict]:
+    """تشغيل الماسح التلقائي على جميع الأسهم"""
+    results = []
+    total = len(stocks_dict)
+    
+    for i, (name, ticker) in enumerate(stocks_dict.items()):
+        try:
+            analysis = analyze_stock(ticker, name)
+            if analysis:
+                results.append(analysis)
+        except Exception as e:
+            print(f"Error scanning {ticker}: {e}")
+        
+        # تحديث التقدم
+        if (i + 1) % 10 == 0:
+            print(f"تم فحص {i+1}/{total} سهماً")
+    
+    # ترتيب النتائج حسب أفضل فرص الشراء
+    results.sort(key=lambda x: x.get('buy_score', 0), reverse=True)
+    
+    # حفظ النتائج
+    with open(SCAN_RESULTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    
+    return results
+
+def get_top_opportunities(limit: int = 5) -> List[Dict]:
+    """الحصول على أفضل فرص الاستثمار"""
+    if SCAN_RESULTS_FILE.exists():
+        with open(SCAN_RESULTS_FILE, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        return results[:limit]
+    return []
+
+# ====================== المحفظة الافتراضية (Paper Trading) ======================
+
+class PaperTrading:
+    """نظام التداول الافتراضي"""
+    
+    @staticmethod
+    def load_portfolio() -> Dict:
+        if PORTFOLIO_FILE.exists():
+            with open(PORTFOLIO_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {"positions": [], "transactions": [], "balance": 100000, "total_profit": 0}
+    
+    @staticmethod
+    def save_portfolio(portfolio: Dict):
+        with open(PORTFOLIO_FILE, 'w', encoding='utf-8') as f:
+            json.dump(portfolio, f, ensure_ascii=False, indent=2)
+    
+    @staticmethod
+    def add_buy(ticker: str, name: str, price: float, shares: int, reason: str):
+        portfolio = PaperTrading.load_portfolio()
+        
+        position = {
+            "ticker": ticker,
+            "name": name,
+            "buy_price": price,
+            "shares": shares,
+            "buy_date": datetime.now().isoformat(),
+            "buy_reason": reason,
+            "current_price": price,
+            "profit_loss": 0,
+            "profit_loss_pct": 0
+        }
+        
+        portfolio["positions"].append(position)
+        portfolio["transactions"].append({
+            "type": "BUY",
+            "ticker": ticker,
+            "price": price,
+            "shares": shares,
+            "amount": price * shares,
+            "date": datetime.now().isoformat(),
+            "reason": reason
+        })
+        
+        portfolio["balance"] -= price * shares
+        PaperTrading.save_portfolio(portfolio)
+        return True
+    
+    @staticmethod
+    def add_sell(ticker: str, price: float, reason: str):
+        portfolio = PaperTrading.load_portfolio()
+        
+        for pos in portfolio["positions"]:
+            if pos["ticker"] == ticker:
+                profit = (price - pos["buy_price"]) * pos["shares"]
+                portfolio["transactions"].append({
+                    "type": "SELL",
+                    "ticker": ticker,
+                    "price": price,
+                    "shares": pos["shares"],
+                    "amount": price * pos["shares"],
+                    "profit": profit,
+                    "date": datetime.now().isoformat(),
+                    "reason": reason
+                })
+                portfolio["balance"] += price * pos["shares"]
+                portfolio["total_profit"] += profit
+                portfolio["positions"].remove(pos)
+                break
+        
+        PaperTrading.save_portfolio(portfolio)
+        return True
+    
+    @staticmethod
+    def update_prices(stocks_dict: Dict):
+        """تحديث أسعار المحفظة"""
+        portfolio = PaperTrading.load_portfolio()
+        
+        for pos in portfolio["positions"]:
+            ticker = pos["ticker"]
+            try:
+                stock = yf.Ticker(ticker)
+                df = stock.history(period="1d")
+                if not df.empty:
+                    current = df['Close'].iloc[-1]
+                    pos["current_price"] = current
+                    pos["profit_loss"] = (current - pos["buy_price"]) * pos["shares"]
+                    pos["profit_loss_pct"] = ((current - pos["buy_price"]) / pos["buy_price"]) * 100
+            except:
+                pass
+        
+        PaperTrading.save_portfolio(portfolio)
+    
+    @staticmethod
+    def get_summary() -> Dict:
+        portfolio = PaperTrading.load_portfolio()
+        PaperTrading.update_prices({})
+        
+        total_value = portfolio["balance"]
+        total_invested = 0
+        
+        for pos in portfolio["positions"]:
+            total_value += pos["current_price"] * pos["shares"]
+            total_invested += pos["buy_price"] * pos["shares"]
+        
+        return {
+            "balance": portfolio["balance"],
+            "total_value": total_value,
+            "total_invested": total_invested,
+            "total_profit": total_value - total_invested - portfolio["balance"],
+            "total_profit_pct": ((total_value - total_invested) / total_invested * 100) if total_invested > 0 else 0,
+            "positions_count": len(portfolio["positions"]),
+            "transactions_count": len(portfolio["transactions"])
+        }
+
+# ====================== نظام التنبيهات التلقائي ======================
+
+def check_and_send_alerts(scan_results: List[Dict]):
+    """فحص النتائج وإرسال تنبيهات تلقائية"""
+    alerts_sent = []
+    
+    for stock in scan_results:
+        buy_score = stock.get('buy_score', 0)
+        
+        # تنبيه شراء قوي
+        if buy_score >= 4:
+            message = f"""
+🚨 <b>تنبيه شراء قوي!</b> 🚨
+
+📊 <b>{stock['name']}</b> ({stock['ticker']})
+💰 السعر: {stock['current_price']:.2f}
+📈 التغير: {stock['daily_change']:+.2f}%
+🎯 درجة الشراء: {buy_score}/7
+
+📋 <b>الأسباب:</b>
+{chr(10).join([f"• {r}" for r in stock.get('buy_reasons', [])[:4]])}
+
+💡 التوصية: شراء فوري
+🎯 الهدف الأول: {stock['resistance']:.2f}
+🛡️ وقف الخسارة: {stock['support']:.2f}
+            """
+            send_telegram_alert(message)
+            alerts_sent.append(stock['ticker'])
+    
+    # حفظ سجل التنبيهات
+    if alerts_sent:
+        alerts = {"timestamp": datetime.now().isoformat(), "alerts": alerts_sent}
+        with open(ALERTS_FILE, 'a', encoding='utf-8') as f:
+            json.dump(alerts, f)
+            f.write('\n')
+    
+    return alerts_sent
+
+# ====================== التحليل بالذكاء الاصطناعي ======================
+
+def get_ai_insights(stock_analysis: Dict, model) -> str:
+    """الحصول على تحليل متقدم من الذكاء الاصطناعي"""
+    if not model:
+        return "الذكاء الاصطناعي غير متوفر"
+    
+    # تجهيز الأخبار للتحليل
+    news_text = "\n".join([f"• {n}" for n in stock_analysis.get('news', [])[:3]])
+    
+    prompt = f"""
+أنت محلل أسهم محترف. قم بتحليل شامل للسهم التالي:
+
+📊 <b>البيانات الفنية:</b>
+- السهم: {stock_analysis['name']} ({stock_analysis['ticker']})
+- السعر: {stock_analysis['current_price']:.2f}
+- RSI: {stock_analysis['rsi']:.1f}
+- الدعم: {stock_analysis['support']:.2f}
+- المقاومة: {stock_analysis['resistance']:.2f}
+- درجة الشراء: {stock_analysis['buy_score']}/7
+- درجة البيع: {stock_analysis['sell_score']}/7
+
+📰 <b>آخر الأخبار:</b>
+{news_text if news_text else "لا توجد أخبار متاحة"}
+
+المطلوب:
+1. دمج التحليل الفني مع الأساسي
+2. تقييم المخاطر والعوائد
+3. توصية نهائية مع توقعات السعر
+4. نصيحة للمستثمر
+
+الرد بالعربية بشكل مختصر (حد أقصى 200 كلمة).
+"""
+    
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"خطأ: {e}"
+
+# ====================== قائمة الأسهم ======================
+
+STOCKS = {
+    "🇪🇬 البنك التجاري الدولي (CIB)": "COMI.CA",
+    "🇪🇬 طلعت مصطفى القابضة": "TMGH.CA",
+    "🇪🇬 السويدي إليكتريك": "SWDY.CA",
+    "🇪🇬 تليكوم مصر": "ETEL.CA",
+    "🇪🇬 الشرقية للدخان": "EAST.CA",
+    "🇸🇦 أرامكو السعودية": "2222.SR",
+    "🇸🇦 مصرف الراجحي": "1120.SR",
+    "🇸🇦 مجموعة STC": "7010.SR",
+    "🇺🇸 Apple Inc.": "AAPL",
+    "🇺🇸 Microsoft Corp.": "MSFT",
+    "🇺🇸 Tesla Inc.": "TSLA",
+}
+
+# ====================== واجهة المستخدم ======================
 
 def main():
-    # تهيئة نظام التنبيهات
-    alert_system = TradingAlertSystem()
-    
-    st.title("🔔 بوت تحليل الأسهم - نظام تنبيهات البيع والشراء")
-    st.markdown(f"**الإصدار {APP_VERSION}** | تنبيهات فورية | توصيات ذكاء اصطناعي")
+    st.title("🧠 العقل المدبر للأسهم - نظام تحليل وتداول ذكي")
+    st.markdown("**الماسح التلقائي | تنبيهات فورية | محفظة افتراضية | ذكاء اصطناعي**")
     st.markdown("---")
+    
+    # تهيئة النماذج
+    model = init_gemini()
     
     # الشريط الجانبي
     with st.sidebar:
         st.markdown("## 📊 لوحة التحكم")
-        st.metric("📈 إجمالي الأسهم", len(STOCKS))
         
-        # حالة الذكاء الاصطناعي
-        model = init_gemini()
-        if model:
-            st.success("🤖 Gemini: متصل")
+        # زر تشغيل الماسح
+        if st.button("🔄 تشغيل الماسح التلقائي", type="primary", use_container_width=True):
+            with st.spinner("جاري فحص جميع الأسهم..."):
+                results = run_scanner(STOCKS)
+                alerts = check_and_send_alerts(results)
+                st.success(f"✅ تم فحص {len(results)} سهماً")
+                if alerts:
+                    st.success(f"📢 تم إرسال {len(alerts)} تنبيه إلى تليجرام")
+        
+        st.divider()
+        
+        # إحصائيات الماسح
+        top_opportunities = get_top_opportunities(5)
+        if top_opportunities:
+            st.markdown("### 🎯 أفضل الفرص")
+            for opp in top_opportunities[:3]:
+                score = opp.get('buy_score', 0)
+                if score >= 3:
+                    st.markdown(f"🟢 **{opp['name']}**")
+                    st.caption(f"السعر: {opp['current_price']:.2f} | درجة: {score}")
+        
+        st.divider()
+        
+        # معلومات التليجرام
+        st.markdown("### 🔔 إعدادات التنبيهات")
+        if "TELEGRAM_BOT_TOKEN" in st.secrets:
+            st.success("✅ بوت تليجرام: متصل")
         else:
-            st.warning("⚠️ أضف مفتاح API")
+            st.warning("⚠️ أضف TELEGRAM_BOT_TOKEN في secrets")
         
-        # إعدادات التنبيهات
-        st.markdown("---")
-        st.markdown("### ⚙️ إعدادات التنبيهات")
-        auto_check = st.checkbox("تفعيل التنبيهات التلقائية", value=True)
-        
-        st.caption("📊 البيانات من Yahoo Finance")
-        st.caption("🎯 نظام تنبيهات متكامل للبيع والشراء")
-    
-    # عرض لوحة التنبيهات في الشريط الجانبي
-    alert_system.display_alerts_panel()
+        # تحديث يدوي
+        if st.button("🔄 تحديث الأسعار", use_container_width=True):
+            PaperTrading.update_prices(STOCKS)
+            st.success("تم تحديث الأسعار")
     
     # التبويبات الرئيسية
-    tab1, tab2, tab3 = st.tabs(["📈 تحليل وتنبيهات", "📊 سجل التنبيهات", "ℹ️ عن النظام"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 فرص الاستثمار", "📈 تحليل متقدم", "💼 المحفظة الافتراضية", "📊 سجل التنبيهات"])
     
     with tab1:
-        st.header("🔍 تحليل السهم وتنبيهات البيع والشراء")
+        st.header("🎯 أفضل فرص الشراء")
         
-        # اختيار السهم
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            search_term = st.text_input(
-                "🔎 ابحث عن سهم",
-                placeholder="مثال: CIB, أرامكو, AAPL",
-                help="اكتب اسم الشركة أو رمز السهم"
-            )
+        # عرض نتائج الماسح
+        opportunities = get_top_opportunities(10)
         
-        with col2:
-            period = st.selectbox("📅 الفترة", ["1mo", "3mo", "6mo", "1y"], index=2)
-        
-        if search_term:
-            # البحث عن السهم
-            found = {}
-            for name, ticker in STOCKS.items():
-                if search_term.lower() in name.lower() or search_term.lower() in ticker.lower():
-                    found[name] = ticker
-            
-            if found:
-                selected_name = st.selectbox("اختر السهم", list(found.keys()), 
-                                            format_func=lambda x: f"{x} ({found[x]})")
-                selected_ticker = found[selected_name]
-                
-                with st.spinner("جاري تحليل السهم..."):
-                    df, info = get_stock_data(selected_ticker, period)
-                
-                if df is not None and not df.empty:
-                    # حساب المؤشرات الأساسية
-                    current_price = df['Close'].iloc[-1]
-                    prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
-                    daily_change = ((current_price - prev_price) / prev_price) * 100
-                    rsi = df['RSI'].iloc[-1] if not pd.isna(df['RSI'].iloc[-1]) else 50
-                    
-                    # حساب MACD
-                    macd, macd_signal = calculate_macd(df['Close'])
-                    
-                    # حساب الدعم والمقاومة
-                    support, resistance = calculate_support_resistance(df)
-                    
-                    # مقارنة السعر مع المتوسط
-                    sma_20 = df['SMA_20'].iloc[-1] if not pd.isna(df['SMA_20'].iloc[-1]) else current_price
-                    if current_price > sma_20:
-                        price_vs_sma = "above"
-                    else:
-                        price_vs_sma = "below"
-                    
-                    # حجم التداول
-                    avg_volume = df['Volume'].tail(20).mean()
-                    volume_ratio = df['Volume'].iloc[-1] / avg_volume if avg_volume > 0 else 1
-                    
-                    # الاتجاه العام
-                    if len(df) >= 20:
-                        old_price = df['Close'].iloc[-20]
-                        trend_pct = ((current_price - old_price) / old_price) * 100
-                        if trend_pct > 5:
-                            trend = "صاعد"
-                        elif trend_pct < -5:
-                            trend = "هابط"
-                        else:
-                            trend = "جانبي"
-                    else:
-                        trend = "جانبي"
-                    
-                    # عرض معلومات الشركة
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("💰 السعر", f"{current_price:.2f}", f"{daily_change:+.2f}%")
-                    with col2:
-                        rsi_color = "🟢" if rsi < 30 else "🔴" if rsi > 70 else "🟡"
-                        st.metric(f"{rsi_color} RSI", f"{rsi:.1f}")
-                    with col3:
-                        st.metric("📈 اتجاه", trend)
-                    with col4:
-                        st.metric("📊 حجم التداول", f"{volume_ratio:.1f}x")
-                    
-                    st.divider()
-                    
-                    # ====================== تحليل إشارات الشراء ======================
-                    buy_analysis = alert_system.analyze_buy_signals(
-                        selected_ticker, current_price, rsi, macd, macd_signal,
-                        price_vs_sma, volume_ratio, trend
-                    )
-                    
-                    # ====================== تحليل إشارات البيع ======================
-                    sell_analysis = alert_system.analyze_sell_signals(
-                        selected_ticker, current_price, rsi, macd, macd_signal,
-                        price_vs_sma, volume_ratio, trend
-                    )
-                    
-                    # ====================== التوصية النهائية ======================
-                    overall = alert_system.get_overall_recommendation(buy_analysis, sell_analysis)
-                    
-                    # عرض التوصية بشكل بارز
-                    st.markdown(f"""
-                    <div style="
-                        background-color: #1e1e1e;
-                        border: 2px solid {overall['color']};
-                        border-radius: 15px;
-                        padding: 20px;
-                        margin: 10px 0;
-                        text-align: center;
-                    ">
-                        <h2 style="color: {overall['color']}; margin: 0;">
-                            {overall['recommendation']}
-                        </h2>
-                        <p style="margin: 5px 0;">درجة الشراء: {overall['buy_score']} | درجة البيع: {overall['sell_score']}</p>
-                        <p style="margin: 5px 0;">درجة الإلحاح: {overall['urgency']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # عرض إشارات الشراء والبيع في عمودين
-                    col_buy, col_sell = st.columns(2)
-                    
-                    with col_buy:
-                        st.markdown("### 🟢 إشارات الشراء")
-                        st.markdown(f"**{buy_analysis['signal']}**")
-                        st.markdown(f"**الإجراء:** {buy_analysis['action']}")
-                        st.markdown(f"**الثقة:** {buy_analysis['confidence']}")
-                        if buy_analysis['suggested_allocation']:
-                            st.markdown(f"**نسبة الاستثمار المقترحة:** {buy_analysis['suggested_allocation']}")
-                        st.markdown("**الأسباب:**")
-                        for reason in buy_analysis['reasons'][:5]:
-                            st.markdown(f"- {reason}")
-                    
-                    with col_sell:
-                        st.markdown("### 🔴 إشارات البيع")
-                        st.markdown(f"**{sell_analysis['signal']}**")
-                        st.markdown(f"**الإجراء:** {sell_analysis['action']}")
-                        st.markdown(f"**الثقة:** {sell_analysis['confidence']}")
-                        st.markdown("**الأسباب:**")
-                        for reason in sell_analysis['reasons'][:5]:
-                            st.markdown(f"- {reason}")
-                    
-                    # أزرار إضافة التنبيهات
-                    st.divider()
-                    st.markdown("### 🎯 إجراءات سريعة")
-                    
-                    col_btn1, col_btn2, col_btn3 = st.columns(3)
-                    
-                    with col_btn1:
-                        if st.button("➕ إضافة تنبيه شراء", use_container_width=True):
-                            alert_system.add_alert_to_history(
-                                selected_ticker, "شراء", buy_analysis, current_price
-                            )
-                            st.success("✅ تم إضافة تنبيه الشراء إلى السجل!")
-                            time.sleep(1)
-                            st.rerun()
-                    
-                    with col_btn2:
-                        if st.button("⚠️ إضافة تنبيه بيع", use_container_width=True):
-                            alert_system.add_alert_to_history(
-                                selected_ticker, "بيع", sell_analysis, current_price
-                            )
-                            st.success("✅ تم إضافة تنبيه البيع إلى السجل!")
-                            time.sleep(1)
-                            st.rerun()
-                    
-                    with col_btn3:
-                        if st.button("🤖 تحليل بالذكاء الاصطناعي", use_container_width=True):
-                            if model:
-                                with st.spinner("جاري التحليل..."):
-                                    prompt = f"""
-                                    محلل أسهم محترف. حلل السهم {selected_ticker}:
-                                    السعر: {current_price:.2f}
-                                    RSI: {rsi:.1f}
-                                    التوصية الفنية: {overall['recommendation']}
-                                    إشارات الشراء: {buy_analysis['reasons'][:3]}
-                                    إشارات البيع: {sell_analysis['reasons'][:3]}
-                                    
-                                    قدم توصية نهائية مختصرة (البيع أو الشراء أو الانتظار) مع الأسباب.
-                                    """
-                                    response = model.generate_content(prompt)
-                                    st.info(f"🧠 **تحليل Gemini:**\n\n{response.text}")
+        if opportunities:
+            for opp in opportunities:
+                buy_score = opp.get('buy_score', 0)
+                if buy_score >= 2:
+                    with st.container():
+                        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                        
+                        with col1:
+                            if buy_score >= 4:
+                                status = "🟢 شراء قوي"
+                            elif buy_score >= 2:
+                                status = "🟡 شراء تدريجي"
                             else:
-                                st.error("الذكاء الاصطناعي غير متوفر")
-                    
-                    # عرض مستويات الدعم والمقاومة
-                    st.divider()
-                    col_sup, col_res = st.columns(2)
-                    with col_sup:
-                        st.metric("🛡️ مستوى الدعم", f"{support:.2f}")
-                        if current_price <= support * 1.02:
-                            st.warning("⚠️ السهم قريب من مستوى الدعم!")
-                    with col_res:
-                        st.metric("⚡ مستوى المقاومة", f"{resistance:.2f}")
-                        if current_price >= resistance * 0.98:
-                            st.warning("⚠️ السهم قريب من مستوى المقاومة!")
-                    
-                    # رسم بياني
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="السعر", line=dict(color='cyan')))
-                    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name="SMA 20", line=dict(color='orange', dash='dash')))
-                    fig.add_hline(y=support, line_dash="dash", line_color="green", annotation_text="دعم")
-                    fig.add_hline(y=resistance, line_dash="dash", line_color="red", annotation_text="مقاومة")
-                    fig.update_layout(template="plotly_dark", height=400, title=f"تحليل {selected_ticker}")
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                else:
-                    st.error("لا توجد بيانات للسهم")
-            else:
-                st.warning("لم يتم العثور على السهم")
+                                status = "⚪ مراقبة"
+                            st.markdown(f"**{opp['name']}**")
+                            st.caption(f"{opp['ticker']} | {status}")
+                        
+                        with col2:
+                            st.metric("السعر", f"{opp['current_price']:.2f}", f"{opp['daily_change']:+.2f}%")
+                        
+                        with col3:
+                            st.metric("RSI", f"{opp['rsi']:.1f}")
+                        
+                        with col4:
+                            st.metric("درجة الشراء", f"{buy_score}/7")
+                        
+                        with st.expander(f"📋 تفاصيل التحليل"):
+                            st.markdown("**✅ أسباب الشراء:**")
+                            for reason in opp.get('buy_reasons', []):
+                                st.write(f"• {reason}")
+                            
+                            if opp.get('sell_reasons'):
+                                st.markdown("**⚠️ أسباب التحذير:**")
+                                for reason in opp.get('sell_reasons', [])[:2]:
+                                    st.write(f"• {reason}")
+                            
+                            st.markdown(f"""
+                            **📊 مستويات رئيسية:**
+                            - الدعم: {opp['support']:.2f}
+                            - المقاومة: {opp['resistance']:.2f}
+                            - المتوسط 20: {opp['sma_20']:.2f}
+                            """)
+                            
+                            # أزرار الإجراءات
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                shares = st.number_input(f"عدد الأسهم", min_value=1, max_value=1000, value=10, key=f"shares_{opp['ticker']}")
+                                if st.button(f"➕ شراء افتراضي", key=f"buy_{opp['ticker']}"):
+                                    PaperTrading.add_buy(
+                                        opp['ticker'], opp['name'], 
+                                        opp['current_price'], shares,
+                                        ", ".join(opp.get('buy_reasons', [])[:2])
+                                    )
+                                    st.success(f"✅ تم شراء {shares} سهم من {opp['name']}")
+                                    time.sleep(1)
+                                    st.rerun()
+                            
+                            with col_b:
+                                if st.button(f"🤖 تحليل AI", key=f"ai_{opp['ticker']}"):
+                                    with st.spinner("جاري التحليل..."):
+                                        ai_result = get_ai_insights(opp, model)
+                                        st.info(f"🧠 **تحليل الذكاء الاصطناعي:**\n\n{ai_result}")
+                        
+                        st.divider()
+        else:
+            st.info("📭 لا توجد نتائج. اضغط على 'تشغيل الماسح التلقائي' في الشريط الجانبي")
     
     with tab2:
-        st.header("📋 سجل التنبيهات")
+        st.header("📈 تحليل سهم فردي")
         
-        if st.session_state.all_alerts:
-            # إحصائيات سريعة
-            buy_count = len([a for a in st.session_state.all_alerts if "شراء" in a.get('action', '')])
-            sell_count = len([a for a in st.session_state.all_alerts if "بيع" in a.get('action', '')])
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("📊 إجمالي التنبيهات", len(st.session_state.all_alerts))
-            col2.metric("🟢 تنبيهات شراء", buy_count)
-            col3.metric("🔴 تنبيهات بيع", sell_count)
-            
-            st.divider()
-            
-            # عرض جميع التنبيهات
-            for alert in st.session_state.all_alerts:
-                if "شراء" in alert.get('action', ''):
-                    emoji = "🟢"
-                    color = "#00ff00"
-                elif "بيع" in alert.get('action', ''):
-                    emoji = "🔴"
-                    color = "#ff4444"
-                else:
-                    emoji = "🟡"
-                    color = "#ffaa00"
+        selected_name = st.selectbox("اختر السهم", list(STOCKS.keys()))
+        selected_ticker = STOCKS[selected_name]
+        
+        if st.button("تحليل", type="primary"):
+            with st.spinner("جاري التحليل..."):
+                analysis = analyze_stock(selected_ticker, selected_name)
                 
-                with st.expander(f"{emoji} {alert['ticker']} - {alert['action']} - {alert['timestamp']}"):
-                    st.write(f"**الإشارة:** {alert['signal']}")
-                    st.write(f"**السعر:** {alert['price']:.2f}")
-                    st.write("**الأسباب:**")
-                    for reason in alert.get('reasons', [])[:5]:
-                        st.write(f"- {reason}")
-            
-            if st.button("🗑️ مسح كل التنبيهات"):
-                st.session_state.all_alerts = []
-                st.rerun()
-        else:
-            st.info("📭 لا توجد تنبيهات مسجلة. قم بتحليل الأسهم وإضافة التنبيهات")
+                if analysis:
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("💰 السعر", f"{analysis['current_price']:.2f}", f"{analysis['daily_change']:+.2f}%")
+                    col2.metric("📊 RSI", f"{analysis['rsi']:.1f}")
+                    col3.metric("🎯 التوصية", analysis['action'])
+                    
+                    st.divider()
+                    
+                    col_buy, col_sell = st.columns(2)
+                    with col_buy:
+                        st.markdown("### ✅ إشارات الشراء")
+                        for reason in analysis.get('buy_reasons', []):
+                            st.write(f"• {reason}")
+                        st.metric("درجة الشراء", f"{analysis['buy_score']}/7")
+                    
+                    with col_sell:
+                        st.markdown("### ⚠️ إشارات البيع")
+                        for reason in analysis.get('sell_reasons', []):
+                            st.write(f"• {reason}")
+                        st.metric("درجة البيع", f"{analysis['sell_score']}/7")
+                    
+                    st.divider()
+                    
+                    if st.button("🧠 تحليل بالذكاء الاصطناعي"):
+                        with st.spinner("جاري التحليل..."):
+                            ai_result = get_ai_insights(analysis, model)
+                            st.success(ai_result)
+                else:
+                    st.error("فشل في تحليل السهم")
     
     with tab3:
-        st.header("ℹ️ نظام تنبيهات البيع والشراء")
-        st.markdown("""
-        ### 🎯 كيف يعمل نظام التنبيهات؟
+        st.header("💼 المحفظة الافتراضية")
         
-        **إشارات الشراء (Buy Signals):**
-        - 🔴 **شراء قوي جداً** (5+ نقاط): RSI منخفض جداً + MACD إيجابي + اتجاه صاعد
-        - 🟠 **شراء جيد** (3-4 نقاط): RSI منخفض + إشارات إيجابية
-        - 🟡 **شراء ضعيف** (2 نقاط): بعض المؤشرات الإيجابية
+        summary = PaperTrading.get_summary()
         
-        **إشارات البيع (Sell Signals):**
-        - 🔴 **بيع قوي** (5+ نقاط): RSI مرتفع جداً + MACD سلبي + اتجاه هابط
-        - 🟠 **بيع** (3-4 نقاط): مؤشرات سلبية واضحة
-        - 🟡 **مراقبة** (2 نقاط): علامات تحذير مبكرة
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("💰 الرصيد", f"{summary['balance']:,.2f}")
+        col2.metric("📊 قيمة المحفظة", f"{summary['total_value']:,.2f}")
+        col3.metric("📈 إجمالي الربح", f"{summary['total_profit']:,.2f}", f"{summary['total_profit_pct']:+.2f}%")
+        col4.metric("🎯 عدد الصفقات", summary['transactions_count'])
         
-        **المؤشرات المستخدمة:**
-        - RSI (مؤشر القوة النسبية)
-        - MACD (تقاطع المتوسطات)
-        - المتوسطات المتحركة
-        - حجم التداول
-        - الاتجاه العام
-        - الدعم والمقاومة
+        st.divider()
         
-        **نصائح مهمة:**
-        ⚠️ هذه التنبيهات للأغراض التعليمية فقط
-        ⚠️ لا تعتبر نصيحة استثمارية
-        ⚠️ يفضل دائمًا إجراء البحث الخاص بك
-        """)
+        # عرض المراكز المفتوحة
+        portfolio = PaperTrading.load_portfolio()
+        
+        if portfolio['positions']:
+            st.markdown("### 📊 المراكز المفتوحة")
+            for pos in portfolio['positions']:
+                col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+                with col1:
+                    st.write(f"**{pos['name']}**")
+                    st.caption(pos['ticker'])
+                with col2:
+                    st.write(f"شراء: {pos['buy_price']:.2f}")
+                with col3:
+                    st.write(f"حالياً: {pos['current_price']:.2f}")
+                with col4:
+                    profit_color = "🟢" if pos['profit_loss'] > 0 else "🔴" if pos['profit_loss'] < 0 else "⚪"
+                    st.write(f"{profit_color} {pos['profit_loss']:+.2f}")
+                with col5:
+                    if st.button(f"بيع", key=f"sell_{pos['ticker']}"):
+                        PaperTrading.add_sell(pos['ticker'], pos['current_price'], "جني أرباح")
+                        st.success(f"✅ تم بيع {pos['name']}")
+                        time.sleep(1)
+                        st.rerun()
+                st.divider()
+        else:
+            st.info("لا توجد مراكز مفتوحة")
+        
+        # سجل الصفقات
+        with st.expander("📜 سجل الصفقات"):
+            for trans in portfolio['transactions'][-10:]:
+                if trans['type'] == 'BUY':
+                    st.write(f"🟢 شراء {trans['shares']} سهم من {trans['ticker']} بسعر {trans['price']:.2f}")
+                else:
+                    st.write(f"🔴 بيع {trans['shares']} سهم من {trans['ticker']} بسعر {trans['price']:.2f} | ربح: {trans.get('profit', 0):.2f}")
+    
+    with tab4:
+        st.header("📊 سجل التنبيهات")
+        
+        if ALERTS_FILE.exists():
+            with open(ALERTS_FILE, 'r', encoding='utf-8') as f:
+                alerts = [json.loads(line) for line in f.readlines()]
+            
+            for alert in reversed(alerts[-20:]):
+                st.info(f"🔔 {alert['timestamp'][:19]} - تم إرسال {len(alert['alerts'])} تنبيه")
+        else:
+            st.info("لا توجد تنبيهات بعد")
 
 if __name__ == "__main__":
     main()
