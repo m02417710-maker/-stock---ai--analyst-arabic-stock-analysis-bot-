@@ -9,6 +9,9 @@ pip install -r requirements.txt
 
 # 4. تشغيل التطبيق
 streamlit run app.py
+# داخل مجلد المشروع
+rm -f engines.py intelligence.py scanner.py run_local_scanner.py clock.py bash yaml
+rm -rf devcontainer database test
 # 1. حذف الملفات المكررة
 rm -f engines.py intelligence.py scanner.py run_local_scanner.py clock.py bash yaml
 rm -rf devcontainer database test
