@@ -1,3 +1,13 @@
+# 1. إنشاء البيئة الافتراضية (اختياري)
+python -m venv venv
+source venv/bin/activate  # في Linux/Mac
+venv\Scripts\activate     # في Windows
+
+# 2. تثبيت المتطلبات
+pip install -r requirements.txt
+
+# 3. تشغيل التطبيق
+streamlit run app.py
 # إضافة الملفات الجديدة
 git add database.py core.py app.py
 
