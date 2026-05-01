@@ -8,9 +8,10 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 LOGS_DIR = BASE_DIR / "logs"
 REPORTS_DIR = BASE_DIR / "reports"
+CACHE_DIR = BASE_DIR / "cache"
 
 # إنشاء المجلدات
-for dir_path in [DATA_DIR, LOGS_DIR, REPORTS_DIR]:
+for dir_path in [DATA_DIR, LOGS_DIR, REPORTS_DIR, CACHE_DIR]:
     dir_path.mkdir(exist_ok=True)
 
 # ====================== إعدادات التطبيق ======================
@@ -31,8 +32,8 @@ RISK_CONFIG = {
     "min_risk_reward_ratio": 1.5,
     "ideal_risk_reward_ratio": 2.0,
     "trailing_stop_default": 5.0,
-    "max_position_size": 0.25,  # 25% من رأس المال كحد أقصى
-    "daily_loss_limit": 5.0  # 5% خسارة يومية كحد أقصى
+    "max_position_size": 0.25,
+    "daily_loss_limit": 5.0
 }
 
 # ====================== إعدادات المؤشرات الفنية ======================
@@ -90,3 +91,7 @@ def get_flexible_ticker(symbol: str) -> str:
     if "." in symbol:
         return symbol
     return f"{symbol}.CA"
+
+def get_current_time():
+    """الحصول على الوقت الحالي"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
