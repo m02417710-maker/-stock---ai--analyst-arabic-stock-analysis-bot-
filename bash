@@ -42,3 +42,11 @@ docker stop stock-analyzer-pro
 
 # بدء الحاوية
 docker start stock-analyzer-pro
+# إضافة الملفات الجديدة
+git add stocks_data.py
+git add app.py
+git add core.py
+
+# رفع التغييرات
+git commit -m "Fix: Move STOCKS to separate file for clarity"
+git push origin main
