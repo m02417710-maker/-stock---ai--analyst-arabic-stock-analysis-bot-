@@ -1,8 +1,4 @@
-# ============================================================
-# Dockerfile - الإصدار النهائي المصحح
-# تم التصحيح: FROM بدلاً من FROW
-# ============================================================
-
+cat > Dockerfile << 'EOF'
 FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -25,3 +21,4 @@ EXPOSE 8501
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+EOF
