@@ -1,9 +1,21 @@
-# app.py - النسخة المعمارية المتكاملة
+# app.py - التطبيق الرئيسي النهائي
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
 
-# استيرادات جديدة
+# إعداد الصفحة أولاً
+st.set_page_config(
+    page_title="Stock AI Analyst Pro - المؤسسي 🏢",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ====================== التهيئة الأمنية ======================
+from security import initialize_security, validate_ticker, get_safe_ticker
+initialize_security()
+
+# ====================== الاستيرادات ======================
 from pathlib import Path
 import tempfile
 import yfinance as yf
@@ -16,226 +28,173 @@ import pandas_ta as ta
 from datetime import datetime
 import io
 
-# استيراد من ملفاتنا
+# استيراد الوحدات الخاصة بنا
 import core
-from database import get_market_statistics, get_market_info
-
-# إعداد الصفحة
-st.set_page_config(
-    page_title="Stock AI Analyst - Enterprise 🏢",
-    page_icon="🏢",
-    layout="wide"
-)
+from database import get_all_stocks, search_stock, MARKETS_DATA
+from news_manager import render_news_section
+from config import APP_VERSION
 
 # ====================== إعداد Gemini ======================
 def init_gemini():
-    """تهيئة الذكاء الاصطناعي"""
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        return genai.GenerativeModel("gemini-1.5-flash")
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            return genai.GenerativeModel("gemini-1.5-flash")
+    except Exception:
+        pass
     return None
 
-# ====================== دوال التنبيهات ======================
-def show_rsi_alert(rsi_value: float):
-    """عرض تنبيه بناءً على قيمة RSI"""
-    if rsi_value > 70:
-        st.error("""
-        ⚠️ **تنبيه: منطقة تشبع شرائي!**  
-        مؤشر RSI فوق 70 يشير إلى أن السهم في منطقة ذروة شراء.  
-        💡 قد يكون مناسباً لجني الأرباح أو الانتظار.
-        """)
-    elif rsi_value < 30:
-        st.success("""
-        ✅ **فرصة: منطقة تشبع بيعي!**  
-        مؤشر RSI أقل من 30 يشير إلى أن السهم في منطقة ذروة بيع.  
-        💡 قد تكون فرصة مناسبة للشراء.
-        """)
-    else:
-        st.info(f"""
-        ℹ️ **السهم في منطقة حيادية**  
-        مؤشر RSI عند {rsi_value:.1f} - وهي منطقة آمنة نسبياً.
-        """)
-
-def show_market_alert(market: str):
-    """عرض معلومات عن السوق"""
-    market_info = get_market_info(market)
-    if market_info:
-        st.info(f"""
-        📊 **معلومات السوق:**  
-        • ⏰ وقت التداول: {market_info.get('market_hours', 'غير محدد')}  
-        • 💵 العملة: {market_info.get('currency', 'غير محدد')}  
-        • 🌍 المنطقة الزمنية: {market_info.get('timezone', 'غير محدد')}
-        """)
-
-# ====================== دالة البحث ======================
-def stock_search_interface():
-    """واجهة البحث المتقدم عن الأسهم"""
-    st.markdown("### 🔍 ابحث عن سهم")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        search_term = st.text_input(
-            "اكتب اسم السهم أو رمزه",
-            placeholder="مثال: الراجحي  أو 1120.SR",
-            help="يمكنك البحث باللغة العربية أو الإنجليزية"
-        )
-    
-    if search_term:
-        results = core.search_stocks_by_keyword(search_term)
-        
-        if results:
-            st.success(f"✅ تم العثور على {len(results)} نتيجة")
-            
-            # عرض النتائج
-            for stock_name, stock_data in results.items():
-                with st.expander(f"📈 {stock_name}"):
-                    st.write(f"**الرمز:** `{stock_data['ticker']}`")
-                    st.write(f"**السوق:** {stock_data['market']}")
-                    st.write(f"**العملة:** {stock_data['currency']}")
-                    
-                    if st.button(f"تحليل {stock_name}", key=stock_data['ticker']):
-                        return stock_data['ticker'], stock_name
-        else:
-            st.warning("❌ لم يتم العثور على نتائج. جرب كلمة بحث أخرى")
-    
-    return None, None
-
-# ====================== الدالة الرئيسية ======================
+# ====================== واجهة المستخدم ======================
 def main():
-    st.title("🏢 بوت تحليل الأسهم - النسخة المتكاملة")
-    st.markdown("**دعم أسواق: مصر 🇪🇬 • السعودية 🇸🇦 • الإمارات 🇦🇪 • أمريكا 🇺🇸**")
+    st.title("🏢 بوت تحليل الأسهم المتكامل")
+    st.markdown(f"**الإصدار {APP_VERSION}** | دعم: مصر 🇪🇬 • السعودية 🇸🇦 • الإمارات 🇦🇪 • أمريكا 🇺🇸")
+    st.markdown("---")
     
-    # عرض إحصائيات في الشريط الجانبي
+    # الشريط الجانبي
     with st.sidebar:
-        st.markdown("## 📊 إحصائيات الأسواق")
-        stats = get_market_statistics()
+        st.markdown("## 📊 لوحة التحكم")
         
-        for market, data in stats.items():
-            if market != 'TOTAL':
-                st.metric(data['name'], data['count'])
-        
-        st.divider()
-        st.metric("📈 إجمالي الأسهم", stats['TOTAL'])
-        st.divider()
+        # إحصائيات الأسواق
+        total_stocks = len(get_all_stocks())
+        st.metric("📈 إجمالي الأسهم", total_stocks)
         
         # حالة الذكاء الاصطناعي
         model = init_gemini()
         if model:
-            st.success("🤖 Gemini AI: متصل")
+            st.success("🤖 Gemini: متصل")
         else:
-            st.warning("⚠️ أضف GEMINI_API_KEY في secrets")
-    
-    # تبويبين: بحث أو تصفح
-    tab1, tab2 = st.tabs(["🔍 بحث عن سهم", "📋 تصفح جميع الأسهم"])
-    
-    selected_ticker = None
-    selected_name = None
-    
-    with tab1:
-        ticker, name = stock_search_interface()
-        if ticker:
-            selected_ticker = ticker
-            selected_name = name
-    
-    with tab2:
-        # تصنيف الأسهم حسب الأسواق
-        market_filter = st.selectbox(
-            "فلتر حسب السوق",
-            ["جميع الأسواق", "🇪🇬 البورصة المصرية", "🇸🇦 تداول السعودية", "🇦🇪 سوق أبوظبي", "🇦🇪 سوق دبي", "🇺🇸 الأسهم الأمريكية"]
-        )
+            st.warning("⚠️ أضف GEMINI_API_KEY")
         
-        # فلتر الأسهم حسب الاختيار
-        filtered_stocks = core.STOCK_NAMES
-        if market_filter != "جميع الأسواق":
-            filtered_stocks = [s for s in core.STOCK_NAMES if market_filter in s]
-        
-        selected_name = st.selectbox(
-            "اختر سهم من القائمة",
-            filtered_stocks,
-            format_func=lambda x: f"{x} ({core.get_stock_ticker(x)})"
-        )
-        
-        if selected_name:
-            selected_ticker = core.get_stock_ticker(selected_name)
-    
-    # ====================== التحليل ======================
-    if selected_ticker and selected_name:
         st.divider()
-        st.header(f"📈 تحليل: {selected_name}")
         
-        # معلومات السوق
-        market = core.get_stock_market(selected_name)
-        if market:
-            show_market_alert(market)
-        
-        # فترة التحليل
-        period = st.selectbox(
-            "📅 الفترة الزمنية للتحليل",
-            ["1mo", "3mo", "6mo", "1y", "2y"],
-            index=3
-        )
-        
-        # جلب البيانات
-        with st.spinner("جاري تحميل البيانات..."):
-            try:
-                stock = yf.Ticker(selected_ticker)
-                hist = stock.history(period=period)
-                
-                if not hist.empty:
-                    # المؤشرات الفنية
-                    hist['SMA_20'] = ta.sma(hist['Close'], length=20)
-                    hist['RSI'] = ta.rsi(hist['Close'], length=14)
-                    
-                    curr_price = hist['Close'].iloc[-1]
-                    rsi = hist['RSI'].iloc[-1] if not pd.isna(hist['RSI'].iloc[-1]) else 50
-                    
-                    # عرض المقاييس
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("💰 السعر", f"{curr_price:.2f}")
-                    col2.metric("📊 RSI", f"{rsi:.1f}")
-                    col3.metric("🔄 SMA 20", f"{hist['SMA_20'].iloc[-1]:.2f}")
-                    col4.metric("🎯 السوق", market if market else "غير محدد")
-                    
-                    # تنبيه RSI
-                    show_rsi_alert(rsi)
-                    
-                    # رسم بياني
-                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-                    fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name="السعر"), row=1, col=1)
-                    fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA_20'], name="SMA 20", line=dict(dash='dash')), row=1, col=1)
-                    fig.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name="RSI"), row=2, col=1)
-                    fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-                    fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-                    fig.update_layout(height=600, template="plotly_dark")
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # زر التحليل الذكي
-                    if st.button("🤖 تحليل ذكي بالذكاء الاصطناعي", type="primary"):
-                        model = init_gemini()
-                        if model:
-                            with st.spinner("جاري التحليل..."):
-                                prompt = f"""
-                                حلل السهم {selected_name} (الرمز: {selected_ticker})
-                                السعر: {curr_price:.2f}
-                                RSI: {rsi:.1f}
-                                السوق: {market}
-                                
-                                قدم تحليلاً فنياً مختصراً بالعربية: الاتجاه، الدعم والمقاومة، التوصية.
-                                """
-                                response = model.generate_content(prompt)
-                                st.success(response.text)
-                        else:
-                            st.error("الذكاء الاصطناعي غير متوفر - أضف مفتاح API")
-                else:
-                    st.error("لا توجد بيانات لهذا السهم")
-                    
-            except Exception as e:
-                st.error(f"خطأ في جلب البيانات: {e}")
+        # إعدادات إضافية
+        st.markdown("### ⚙️ الإعدادات")
+        debug_mode = st.checkbox("وضع التصحيح", value=False)
+        if debug_mode:
+            st.session_state.debug = True
     
-    # تذييل
-    st.divider()
-    st.caption("📊 البيانات من Yahoo Finance | 🧠 التحليل بـ Google Gemini | 🏗️ النسخة المتكاملة")
+    # التبويبات الرئيسية
+    tabs = st.tabs(["📈 تحليل الأسهم", "📰 مركز الأخبار", "🔍 بحث متقدم", "ℹ️ عن التطبيق"])
+    
+    with tabs[0]:
+        st.header("تحليل سهم فردي")
+        
+        # اختيار السهم
+        search_term = st.text_input("🔍 ابحث عن سهم بالاسم أو الرمز", placeholder="مثال: CIB أو البنك التجاري")
+        
+        if search_term:
+            results = search_stock(search_term)
+            if results:
+                st.success(f"تم العثور على {len(results)} نتيجة")
+                selected = st.selectbox("اختر السهم", list(results.keys()))
+                ticker = results[selected]['ticker']
+                market = results[selected]['market']
+                
+                # جلب البيانات والتحليل
+                with st.spinner("جاري تحليل السهم..."):
+                    try:
+                        stock = yf.Ticker(ticker)
+                        hist = stock.history(period="1y")
+                        
+                        if not hist.empty:
+                            # حساب المؤشرات
+                            hist['RSI'] = ta.rsi(hist['Close'], length=14)
+                            hist['SMA_20'] = ta.sma(hist['Close'], length=20)
+                            
+                            curr_price = hist['Close'].iloc[-1]
+                            rsi = hist['RSI'].iloc[-1] if not pd.isna(hist['RSI'].iloc[-1]) else 50
+                            
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("💰 السعر", f"{curr_price:.2f}")
+                            col2.metric("📊 RSI", f"{rsi:.1f}")
+                            col3.metric("🏷️ السوق", market)
+                            
+                            # رسم بياني
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name="السعر"))
+                            fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA_20'], name="SMA 20", line=dict(dash='dash')))
+                            fig.update_layout(template="plotly_dark", height=500)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # تحليل RSI
+                            if rsi > 70:
+                                st.error("⚠️ تنبيه: منطقة تشبع شرائي (RSI > 70)")
+                            elif rsi < 30:
+                                st.success("✅ فرصة: منطقة تشبع بيعي (RSI < 30)")
+                            
+                            # تحليل الذكاء الاصطناعي
+                            if st.button("🤖 تحليل ذكي", type="primary") and model:
+                                with st.spinner("جاري التحليل..."):
+                                    prompt = f"حلل سهم {ticker} فنياً: السعر {curr_price:.2f}، RSI {rsi:.1f}"
+                                    response = model.generate_content(prompt)
+                                    st.write(response.text)
+                    except Exception as e:
+                        st.error(f"خطأ: {e}")
+            else:
+                st.warning("لم يتم العثور على نتائج")
+    
+    with tabs[1]:
+        # عرض قسم الأخبار الكامل
+        render_news_section()
+    
+    with tabs[2]:
+        st.header("🔍 البحث المتقدم")
+        st.info("""
+        ### ميزات البحث:
+        - البحث بالاسم العربي أو الإنجليزي
+        - البحث بالرمز
+        - تصفية حسب السوق
+        - الحصول على معلومات مفصلة
+        """)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            market_filter = st.selectbox("فلتر بالسوق", ["الكل"] + list(MARKETS_DATA.keys()))
+        with col2:
+            keyword = st.text_input("كلمة البحث", placeholder="اسم الشركة أو الرمز")
+        
+        if keyword:
+            results = search_stock(keyword)
+            if market_filter != "الكل":
+                results = {k: v for k, v in results.items() if v['market'] == market_filter}
+            
+            if results:
+                st.dataframe(pd.DataFrame([{
+                    "السهم": name,
+                    "الرمز": data['ticker'],
+                    "السوق": data['market'],
+                    "العملة": data['currency']
+                } for name, data in results.items()]), use_container_width=True)
+    
+    with tabs[3]:
+        st.header("ℹ️ معلومات عن التطبيق")
+        st.markdown(f"""
+        ### 🏆 Stock AI Analyst Pro - الإصدار {APP_VERSION}
+        
+        **الميزات الرئيسية:**
+        - ✅ دعم 5 أسواق مالية (مصر، السعودية، الإمارات، أمريكا)
+        - ✅ أكثر من 100 سهم في قاعدة البيانات
+        - ✅ تحليل فني متقدم (RSI, SMA, MACD)
+        - ✅ نظام أمان متكامل ضد الاختراق
+        - ✅ أخبار السوق العالمية والمحلية
+        - ✅ تحليل بالذكاء الاصطناعي Gemini
+        
+        **المصادر:**
+        - 📊 البيانات: Yahoo Finance API
+        - 🧠 الذكاء الاصطناعي: Google Gemini
+        - 📰 الأخبار: Yahoo Finance, Google News
+        
+        **التنصل:**
+        هذا التطبيق للأغراض التعليمية فقط. لا يقدم نصائح استثمارية.
+        
+        **عن أخبار ثاندر (Thndr):**
+        تطبيق ثاندر هو منصة وساطة مالية مصرية مرخصة هيئة الرقابة المالية.
+        للحصول على أخبار ثاندر الرسمية، يُرجى تحميل التطبيق من المتجر الرسمي.
+        
+        ---
+        **مطور التطبيق:** Stock AI Analyst Team
+        **آخر تحديث:** {datetime.now().strftime("%Y-%m-%d %H:%M")}
+        """)
 
 if __name__ == "__main__":
     main()
