@@ -1,0 +1,133 @@
+# docker-compose.yml - تشغيل البورصجي AI مع خدمات إضافية
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # البورصجي AI - التطبيق الرئيسي
+  # ===========================================================================
+  boursagi-app:
+    build: .
+    container_name: boursagi-ai
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./.streamlit:/app/.streamlit
+    environment:
+      - TZ=Africa/Cairo
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - boursagi-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # ماسح السوق التلقائي (يعمل في الخلفية)
+  # ===========================================================================
+  boursagi-scanner:
+    build: .
+    container_name: boursagi-scanner
+    restart: unless-stopped
+    command: python -c "
+import time
+from market_scanner import get_market_opportunities
+while True:
+    try:
+        opportunities = get_market_opportunities()
+        print(f'[{time.strftime('%Y-%m-%d %H:%M:%S')}] تم المسح - {len(opportunities)} فرصة')
+    except Exception as e:
+        print(f'خطأ: {e}')
+    time.sleep(300)
+"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - TZ=Africa/Cairo
+    depends_on:
+      - boursagi-app
+    networks:
+      - boursagi-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # قاعدة بيانات PostgreSQL (اختياري - للاستخدام المتقدم)
+  # ===========================================================================
+  boursagi-db:
+    image: postgres:15-alpine
+    container_name: boursagi-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=boursagi
+      - POSTGRES_PASSWORD=boursagi123
+      - POSTGRES_DB=boursagi
+      - TZ=Africa/Cairo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - boursagi-network
+    profiles:
+      - advanced
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Redis للتخزين المؤقت (اختياري)
+  # ===========================================================================
+  boursagi-redis:
+    image: redis:7-alpine
+    container_name: boursagi-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - boursagi-network
+    profiles:
+      - advanced
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# الشبكات
+# =============================================================================
+networks:
+  boursagi-network:
+    driver: bridge
+    name: boursagi-network
+
+# =============================================================================
+# وحدات التخزين
+# =============================================================================
+volumes:
+  postgres_data:
+    name: boursagi_postgres_data
+  redis_data:
+    name: boursagi_redis_data
