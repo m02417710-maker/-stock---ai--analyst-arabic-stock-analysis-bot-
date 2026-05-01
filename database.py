@@ -41,8 +41,7 @@ def init_database():
             alert_type TEXT,
             message TEXT,
             timestamp TEXT,
-            is_sent INTEGER DEFAULT 0,
-            FOREIGN KEY (trade_id) REFERENCES trades(id)
+            is_sent INTEGER DEFAULT 0
         )
     ''')
     
@@ -74,9 +73,9 @@ def init_database():
     conn.close()
     
     # إعدادات افتراضية
-    set_default_settings()
+    _set_default_settings()
 
-def set_default_settings():
+def _set_default_settings():
     """تعيين الإعدادات الافتراضية"""
     default_settings = {
         "capital": "100000",
@@ -153,16 +152,26 @@ def load_trades(status: str = "active") -> List[Dict]:
     conn.close()
     
     trades = []
+    column_names = ['id', 'symbol', 'entry_price', 'target_price', 'stop_loss', 
+                    'trailing_stop', 'quantity', 'sector', 'date', 'status',
+                    'current_price', 'profit_pct', 'highest_price', 'notes']
+    
     for row in rows:
-        trades.append({
-            "id": row[0], "symbol": row[1], "entry_price": row[2],
-            "target_price": row[3], "stop_loss": row[4], "trailing_stop": row[5] if row[5] else 0,
-            "quantity": row[6], "sector": row[7], "date": row[8],
-            "status": row[9], "current_price": row[10] if row[10] else row[2],
-            "profit_pct": row[11] if row[11] else 0,
-            "highest_price": row[12] if row[12] else row[2],
-            "notes": row[13] if len(row) > 13 else ""
-        })
+        trade = {}
+        for i, col in enumerate(column_names):
+            if i < len(row):
+                trade[col] = row[i]
+        trades.append(trade)
+    
+    # تعيين القيم الافتراضية
+    for trade in trades:
+        if trade.get('current_price') is None:
+            trade['current_price'] = trade['entry_price']
+        if trade.get('profit_pct') is None:
+            trade['profit_pct'] = 0
+        if trade.get('highest_price') is None:
+            trade['highest_price'] = trade['entry_price']
+    
     return trades
 
 def update_trade(trade_id: int, **kwargs):
@@ -171,7 +180,8 @@ def update_trade(trade_id: int, **kwargs):
     cursor = conn.cursor()
     
     for key, value in kwargs.items():
-        if key in ["target_price", "stop_loss", "notes", "status"]:
+        if key in ['target_price', 'stop_loss', 'current_price', 'profit_pct', 
+                   'highest_price', 'notes', 'status']:
             cursor.execute(f'UPDATE trades SET {key} = ? WHERE id = ?', (value, trade_id))
     
     conn.commit()
@@ -190,20 +200,18 @@ def close_trade(trade_id: int, exit_price: float):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # جلب بيانات الصفقة
     cursor.execute('SELECT entry_price, quantity FROM trades WHERE id = ?', (trade_id,))
     row = cursor.fetchone()
     
     if row:
         entry_price, quantity = row
         profit = (exit_price - entry_price) * quantity
-        profit_pct = ((exit_price - entry_price) / entry_price) * 100
+        profit_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
         cursor.execute('''
             UPDATE trades SET status = 'closed', current_price = ?, profit_pct = ? WHERE id = ?
         ''', (exit_price, profit_pct, trade_id))
         
-        # تسجيل الإغلاق في سجل التنبيهات
         cursor.execute('''
             INSERT INTO alerts_log (trade_id, alert_type, message, timestamp, is_sent)
             VALUES (?, ?, ?, ?, ?)
@@ -212,8 +220,6 @@ def close_trade(trade_id: int, exit_price: float):
     
     conn.commit()
     conn.close()
-
-# ====================== دوال التنبيهات ======================
 
 def add_alert(trade_id: int, alert_type: str, message: str):
     """إضافة تنبيه جديد"""
@@ -225,62 +231,3 @@ def add_alert(trade_id: int, alert_type: str, message: str):
     ''', (trade_id, alert_type, message, datetime.now().isoformat(), 0))
     conn.commit()
     conn.close()
-
-def get_pending_alerts() -> List[Dict]:
-    """الحصول على التنبيهات غير المرسلة"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT id, trade_id, alert_type, message, timestamp 
-        FROM alerts_log WHERE is_sent = 0 ORDER BY timestamp
-    ''')
-    rows = cursor.fetchall()
-    conn.close()
-    
-    return [{"id": r[0], "trade_id": r[1], "type": r[2], "message": r[3], "timestamp": r[4]} for r in rows]
-
-def mark_alert_sent(alert_id: int):
-    """تحديد تنبيه كمرسل"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('UPDATE alerts_log SET is_sent = 1 WHERE id = ?', (alert_id,))
-    conn.commit()
-    conn.close()
-
-# ====================== دوال الإحصائيات ======================
-
-def save_daily_stats():
-    """حفظ إحصائيات اليوم"""
-    trades = load_trades("all")
-    if not trades:
-        return
-    
-    total_invested = sum(t["entry_price"] * t["quantity"] for t in trades)
-    total_current = sum(t.get("current_price", t["entry_price"]) * t["quantity"] for t in trades)
-    total_profit = total_current - total_invested
-    profit_pct = (total_profit / total_invested) * 100 if total_invested > 0 else 0
-    
-    winning_trades = len([t for t in trades if t.get("profit_pct", 0) > 0])
-    win_rate = (winning_trades / len(trades)) * 100 if trades else 0
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT OR REPLACE INTO performance_stats (date, total_invested, total_current, 
-                    total_profit, profit_pct, win_rate, trades_count, winning_trades)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (datetime.now().strftime("%Y-%m-%d"), total_invested, total_current,
-          total_profit, profit_pct, win_rate, len(trades), winning_trades))
-    conn.commit()
-    conn.close()
-
-def get_performance_history(days: int = 30) -> pd.DataFrame:
-    """الحصول على تاريخ الأداء"""
-    conn = sqlite3.connect(DB_PATH)
-    query = f"SELECT * FROM performance_stats ORDER BY date DESC LIMIT {days}"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-    return df
-
-# تهيئة قاعدة البيانات عند الاستيراد
-init_database()
