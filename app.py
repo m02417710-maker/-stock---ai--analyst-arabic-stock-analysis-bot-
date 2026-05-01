@@ -1,26 +1,23 @@
 # ============================================================
-# app.py - الواجهة الرئيسية (نسخة متوافقة مع Docker)
+# app.py - الواجهة الرئيسية (مصححة)
 # ============================================================
 
 import streamlit as st
-import core
-from strings import UI_TEXT
+import core  # استيراد الملف كاملاً
 from datetime import datetime
-import os
 
 # ============================================================
 # إعدادات الصفحة
 # ============================================================
 
 st.set_page_config(
-    page_title="المحلل المالي المتكامل — Pro",
+    page_title="المحلل المالي المتكامل",
     page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # ============================================================
-# التصميم
+# نص الواجهة
 # ============================================================
 
 st.markdown("""
@@ -29,7 +26,7 @@ st.markdown("""
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
 }
 [data-testid="stMetric"] {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    background: #1e293b;
     border: 1px solid #10b981;
     border-radius: 15px;
     padding: 15px;
@@ -42,28 +39,23 @@ st.markdown("""
 # ============================================================
 
 with st.sidebar:
-    st.markdown(f"# {UI_TEXT['app_title']}")
+    st.markdown("# 📊 المحلل المالي المتكامل")
     st.markdown("---")
     
-    st.markdown(f"### {UI_TEXT['sidebar_capital']}")
-    capital = st.number_input(UI_TEXT["sidebar_capital_label"], min_value=100, value=10000, step=1000)
-    risk_percent = st.slider(UI_TEXT["sidebar_risk_label"], 0.5, 5.0, 2.0, 0.5)
+    capital = st.number_input("💰 رأس المال ($)", min_value=100, value=10000, step=1000)
+    risk_pct = st.slider("⚡ نسبة المخاطرة (%)", 0.5, 5.0, 2.0, 0.5)
     
     st.markdown("---")
     
-    selected_name = st.selectbox("🔍 اختر السهم", list(core.STOCKS.keys()))
-    ticker = core.STOCKS[selected_name]
+    # استخدام core.STOCKS مباشرة
+    selected = st.selectbox("🔍 اختر السهم", list(core.STOCKS.keys()))
+    ticker = core.STOCKS[selected]
     
     st.caption(f"📌 الرمز: `{ticker}`")
     st.markdown("---")
-    
-    st.markdown("### 📊 معلومات")
     st.caption(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
-    st.caption(f"🔄 تحديث تلقائي كل 5 دقائق")
-    st.caption(f"📈 إجمالي الأسهم: {len(core.STOCKS)}")
-    st.caption("🐳 Docker: جاهز للتشغيل")
     
-    if st.button(UI_TEXT["sidebar_update_btn"], use_container_width=True):
+    if st.button("🔄 تحديث", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -71,55 +63,50 @@ with st.sidebar:
 # جلب البيانات
 # ============================================================
 
-st.markdown(f"## {UI_TEXT['page_title'].format(selected=selected_name)}")
+st.markdown(f"## تحليل {selected}")
 st.markdown("---")
 
-with st.spinner("🔄 جاري تحليل البيانات..."):
+with st.spinner("جاري التحليل..."):
     df, info = core.get_data(ticker)
 
 if df is not None and not df.empty:
-    # التحليل الأساسي
-    score, signals, recommendation, rec_color = core.analyze(df)
-    current_price = df['Close'].iloc[-1]
-    prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
-    change = ((current_price - prev_price) / prev_price) * 100
+    # التحليل
+    score, signals, rec, color = core.analyze(df)
+    current = df['Close'].iloc[-1]
+    prev = df['Close'].iloc[-2] if len(df) > 1 else current
+    change = ((current - prev) / prev) * 100
     
     # مونت كارلو
-    with st.spinner("🔮 تشغيل محاكاة مونت كارلو..."):
-        mc = core.monte_carlo_gbm(df)
+    mc = core.monte_carlo_gbm(df)
     
     # إدارة المخاطر
-    shares, position, actual_risk, risk_advice = core.risk_management(capital, current_price, 5, risk_percent)
-    
-    # الأهداف
-    target_price = df['Resistance'].iloc[-1] if not pd.isna(df['Resistance'].iloc[-1]) else current_price * 1.07
-    stop_price = current_price * 0.95
+    shares, position, actual_risk, advice = core.risk_management(capital, current, 5, risk_pct)
     
     # بطاقات
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(UI_TEXT["metric_price"], f"{current_price:.2f}", f"{change:+.2f}%")
-    col2.metric(UI_TEXT["metric_confidence"], f"{score}/5")
-    col3.metric(UI_TEXT["metric_rsi"], f"{df['RSI'].iloc[-1]:.1f}")
-    col4.metric(UI_TEXT["metric_position"], f"${position:,.2f}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("💰 السعر", f"{current:.2f}", f"{change:+.2f}%")
+    c2.metric("🎯 درجة الثقة", f"{score}/5")
+    c3.metric("📊 RSI", f"{df['RSI'].iloc[-1]:.1f}")
+    c4.metric("💵 حجم الصفقة", f"${position:,.2f}")
     
     if mc:
-        col5, col6, col7, col8 = st.columns(4)
-        col5.metric(UI_TEXT["metric_profit_prob"], f"{mc['profit_prob']:.0f}%")
-        col6.metric(UI_TEXT["metric_target_10"], f"{mc['target_10_prob']:.0f}%")
-        col7.metric(UI_TEXT["metric_var_95"], f"{mc['var_95_pct']:.1f}%")
-        col8.metric(UI_TEXT["metric_stop_prob"], f"{mc['stop_prob']:.0f}%")
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("📈 احتمال الربح", f"{mc['profit_prob']:.0f}%")
+        c6.metric("🎯 هدف +10%", f"{mc['target_10_prob']:.0f}%")
+        c7.metric("⚠️ VaR 95%", f"{mc['var_95_pct']:.1f}%")
+        c8.metric("📉 كسر الوقف", f"{mc['stop_prob']:.0f}%")
     
     st.markdown("---")
     
     # التوصية
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
-                border: 2px solid {rec_color};
-                border-radius: 20px; padding: 20px;
+    <div style="background: #1e293b;
+                border: 2px solid {color};
+                border-radius: 20px;
+                padding: 20px;
                 text-align: center;">
-        <h2 style="color: {rec_color};">{recommendation}</h2>
-        <p>🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}</p>
-        <p style="font-size: 12px;">{risk_advice}</p>
+        <h2 style="color: {color};">{rec}</h2>
+        <p>🎯 هدف: {df['Resistance'].iloc[-1]:.2f} | 🛑 وقف: {current * 0.95:.2f}</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -127,13 +114,13 @@ if df is not None and not df.empty:
     tab1, tab2, tab3 = st.tabs(["📈 الرسم البياني", "📋 التحليل", "🔍 الماسح"])
     
     with tab1:
-        fig = core.create_chart(df, ticker, selected_name, target_price, stop_price)
+        fig = core.create_chart(df, ticker, selected)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
         for s in signals:
-            if "✅" in s or "🔥" in s or "💰" in s:
+            if "✅" in s or "🔥" in s:
                 st.success(s)
             elif "⚠️" in s:
                 st.warning(s)
@@ -142,36 +129,23 @@ if df is not None and not df.empty:
         
         st.markdown("---")
         st.markdown("**نقاط التداول**")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown(f"- نقطة الدخول: {current_price:.2f}")
-            st.markdown(f"- الهدف الأول: {target_price:.2f}")
-        with col_b:
-            st.markdown(f"- الهدف الثاني: {current_price * 1.08:.2f}")
-            st.markdown(f"- وقف الخسارة: {stop_price:.2f}")
+        st.markdown(f"- نقطة الدخول: {current:.2f}")
+        st.markdown(f"- الهدف الأول: {df['Resistance'].iloc[-1]:.2f}")
+        st.markdown(f"- الهدف الثاني: {current * 1.08:.2f}")
+        st.markdown(f"- وقف الخسارة: {current * 0.95:.2f}")
     
     with tab3:
         if st.button("🚀 تشغيل الماسح", use_container_width=True):
-            with st.spinner("جاري مسح جميع الأسهم..."):
+            with st.spinner("جاري المسح..."):
                 results = core.scan_market_parallel()
                 if not results.empty:
-                    st.success(f"تم فحص {len(results)} سهمًا بنجاح")
                     st.dataframe(results, use_container_width=True, hide_index=True)
                 else:
                     st.warning("لا توجد بيانات")
 
 else:
-    st.error(UI_TEXT["error_fetch"])
-    st.info(UI_TEXT["error_solutions"])
-
-# ============================================================
-# تذييل
-# ============================================================
+    st.error("تعذر جلب البيانات")
+    st.info("تأكد من اتصال الإنترنت وأعد المحاولة")
 
 st.markdown("---")
-st.markdown(f"""
-<div style="text-align: center; color: #64748b; font-size: 12px;">
-    🚀 {UI_TEXT['footer']}<br>
-    🔄 تحديث تلقائي كل 5 دقائق | 🐳 Docker Ready
-</div>
-""", unsafe_allow_html=True)
+st.caption("تحليل فني | توقعات مونت كارلو | إدارة مخاطر")
