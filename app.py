@@ -1,19 +1,18 @@
-# البورصجي AI - النسخة المرنة (Flexible Edition)
+# البورصجي AI - النسخة النهائية (مع توصيات العقل المدبر + Trailing Stop)
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import yfinance as yf
 import numpy as np
-import json
 import sqlite3
 import requests
 from pathlib import Path
 
 # 1. إعدادات الصفحة
 st.set_page_config(
-    page_title="البورصجي AI - المرن",
-    page_icon="🔄",
+    page_title="البورصجي AI - العقل المدبر",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -79,13 +78,15 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
         transition: all 0.3s;
-        position: relative;
     }
     
     .trade-card:hover {
         border-color: #00ffcc;
         transform: translateX(-5px);
     }
+    
+    .profit-positive { color: #00ff88; font-weight: bold; }
+    .profit-negative { color: #ff4444; font-weight: bold; }
     
     /* مؤشرات المخاطر */
     .risk-low {
@@ -112,10 +113,6 @@ st.markdown("""
         font-size: 10px;
     }
     
-    .profit-positive { color: #00ff88; font-weight: bold; }
-    .profit-negative { color: #ff4444; font-weight: bold; }
-    
-    /* شريط التقدم */
     .progress-bar-container {
         background: #1c222d;
         height: 6px;
@@ -129,17 +126,6 @@ st.markdown("""
         height: 100%;
         border-radius: 10px;
         transition: width 0.5s;
-    }
-    
-    /* أزرار التعديل */
-    .edit-btn {
-        background: rgba(0, 255, 204, 0.1);
-        border: 1px solid #00ffcc;
-        color: #00ffcc;
-        border-radius: 20px;
-        padding: 4px 12px;
-        font-size: 11px;
-        cursor: pointer;
     }
     
     .footer {
@@ -162,14 +148,11 @@ st.markdown("""
 
 # 3. دالة مرنة لدعم جميع الأسواق
 def get_flexible_ticker(symbol):
-    """دعم مرن لجميع الأسواق (مصر، السعودية، أمريكا)"""
     if "." in symbol:
         return symbol
-    # افتراض أن الرمز بدون لاحقة هو سهم مصري
     return f"{symbol}.CA"
 
 def get_market_flag(symbol):
-    """تحديد علم السوق تلقائياً"""
     if ".CA" in symbol:
         return "🇪🇬"
     elif ".SR" in symbol:
@@ -191,12 +174,14 @@ def init_database():
             entry_price REAL,
             target_price REAL,
             stop_loss REAL,
+            trailing_stop REAL,
             quantity INTEGER,
             sector TEXT,
             date TEXT,
             status TEXT,
             current_price REAL,
-            profit_pct REAL
+            profit_pct REAL,
+            highest_price REAL
         )
     ''')
     conn.commit()
@@ -215,10 +200,11 @@ def load_trades():
     for row in rows:
         trades.append({
             "id": row[0], "symbol": row[1], "entry_price": row[2],
-            "target_price": row[3], "stop_loss": row[4], "quantity": row[5],
-            "sector": row[6], "date": row[7], "status": row[8],
-            "current_price": row[9] if row[9] else row[2],
-            "profit_pct": row[10] if row[10] else 0
+            "target_price": row[3], "stop_loss": row[4], "trailing_stop": row[5] if row[5] else 0,
+            "quantity": row[6], "sector": row[7], "date": row[8],
+            "status": row[9], "current_price": row[10] if row[10] else row[2],
+            "profit_pct": row[11] if row[11] else 0,
+            "highest_price": row[12] if row[12] else row[2]
         })
     return trades
 
@@ -226,11 +212,11 @@ def save_trade(trade):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO trades (symbol, entry_price, target_price, stop_loss, quantity, sector, date, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, entry_price, target_price, stop_loss, quantity, sector, date, status, highest_price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (trade["symbol"], trade["entry_price"], trade["target_price"], 
           trade.get("stop_loss", trade["entry_price"] * 0.95),
-          trade["quantity"], trade["sector"], trade["date"], "active"))
+          trade["quantity"], trade["sector"], trade["date"], "active", trade["entry_price"]))
     conn.commit()
     conn.close()
 
@@ -242,6 +228,13 @@ def update_trade(trade_id, target_price, stop_loss):
     conn.commit()
     conn.close()
 
+def update_trailing_stop(trade_id, trailing_stop):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE trades SET trailing_stop = ? WHERE id = ?', (trailing_stop, trade_id))
+    conn.commit()
+    conn.close()
+
 def delete_trade(trade_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -250,29 +243,57 @@ def delete_trade(trade_id):
     conn.close()
 
 def update_trade_prices():
-    """تحديث أسعار جميع الصفقات"""
+    """تحديث أسعار جميع الصفقات مع تطبيق Trailing Stop"""
     trades = load_trades()
+    alerts = []
+    
     for trade in trades:
         try:
             ticker = get_flexible_ticker(trade["symbol"])
             stock = yf.Ticker(ticker)
-            df = stock.history(period="1d")
+            df = stock.history(period="5d")
             if not df.empty:
                 current = df['Close'].iloc[-1]
                 profit_pct = ((current - trade["entry_price"]) / trade["entry_price"]) * 100
                 
+                # تحديث أعلى سعر
+                highest_price = max(trade.get("highest_price", trade["entry_price"]), current)
+                
+                # حساب Trailing Stop
+                if trade.get("trailing_stop", 0) > 0:
+                    new_stop = highest_price * (1 - trade["trailing_stop"] / 100)
+                    if new_stop > trade["stop_loss"]:
+                        conn = sqlite3.connect(DB_PATH)
+                        cursor = conn.cursor()
+                        cursor.execute('UPDATE trades SET stop_loss = ? WHERE id = ?', (new_stop, trade["id"]))
+                        conn.commit()
+                        conn.close()
+                        
+                        if new_stop > trade["stop_loss"]:
+                            alerts.append(f"📈 {trade['symbol']}: تم رفع وقف الخسارة إلى {new_stop:.2f}")
+                
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
-                cursor.execute('UPDATE trades SET current_price = ?, profit_pct = ? WHERE id = ?', 
-                               (current, profit_pct, trade["id"]))
+                cursor.execute('UPDATE trades SET current_price = ?, profit_pct = ?, highest_price = ? WHERE id = ?', 
+                               (current, profit_pct, highest_price, trade["id"]))
                 conn.commit()
                 conn.close()
+                
+                # تنبيه قرب الهدف
+                if current >= trade["target_price"] * 0.95:
+                    alerts.append(f"🎯 {trade['symbol']}: قرب من تحقيق الهدف! ({current:.2f}/{trade['target_price']:.2f})")
+                
+                # تنبيه قرب وقف الخسارة
+                if current <= trade["stop_loss"] * 1.02:
+                    alerts.append(f"⚠️ {trade['symbol']}: قرب من وقف الخسارة! ({current:.2f}/{trade['stop_loss']:.2f})")
+                    
         except:
             pass
+    
+    return alerts
 
 # 5. دوال التحليل
 def calculate_risk_reward(entry, target, stop_loss):
-    """حساب نسبة المخاطرة/العائد"""
     risk = entry - stop_loss if stop_loss < entry else stop_loss - entry
     reward = target - entry
     if risk <= 0:
@@ -280,7 +301,6 @@ def calculate_risk_reward(entry, target, stop_loss):
     return reward / risk
 
 def get_risk_level(risk_reward):
-    """تحديد مستوى المخاطرة"""
     if risk_reward >= 3:
         return "low", "منخفضة 🟢"
     elif risk_reward >= 1.5:
@@ -311,7 +331,7 @@ def calculate_portfolio_stats(trades):
 # 6. الواجهة الرئيسية
 def main():
     # تحديث الأسعار
-    update_trade_prices()
+    alerts = update_trade_prices()
     
     # شريط المؤشرات
     st.markdown("""
@@ -323,12 +343,22 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # عرض التنبيهات
+    if alerts:
+        for alert in alerts[:3]:
+            if "🎯" in alert:
+                st.success(alert)
+            elif "⚠️" in alert:
+                st.warning(alert)
+            else:
+                st.info(alert)
+    
     # الهيدر
     st.markdown("""
     <div class="main-header">
         <div>
-            <span class="logo-title">🔄 البورصجي AI</span>
-            <span style="font-size: 12px; color: #888;">النسخة المرنة - Flexible Edition</span>
+            <span class="logo-title">🧠 البورصجي AI</span>
+            <span style="font-size: 12px; color: #888;">العقل المدبر - الإصدار النهائي</span>
         </div>
         <div style="display: flex; gap: 15px;">
             <span style="font-size: 12px;">📅 """ + datetime.now().strftime("%Y-%m-%d") + """</span>
@@ -338,7 +368,7 @@ def main():
     """, unsafe_allow_html=True)
     
     # التبويبات
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة التحكم", "📒 مفكرة الصفقات", "🎯 إدارة المخاطر", "📄 التقارير"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة التحكم", "📒 مفكرة الصفقات", "🧠 العقل المدبر", "📄 التقارير"])
     
     # ====================== التبويب 1: لوحة التحكم ======================
     with tab1:
@@ -350,194 +380,124 @@ def main():
         col2.metric("📈 القيمة الحالية", f"{stats['total_current']:,.0f}")
         col3.metric("📊 إجمالي الربح", f"{stats['total_profit']:+,.0f}", f"{stats['profit_pct']:+.1f}%")
         col4.metric("🏆 نسبة النجاح", f"{stats['win_rate']:.1f}%")
-        
-        # رسم بياني
-        if trades:
-            profit_data = [{"السهم": t["symbol"], "الربح": t.get("profit_pct", 0)} for t in trades[:10]]
-            df_profit = pd.DataFrame(profit_data)
-            
-            fig = go.Figure(data=[go.Bar(
-                x=df_profit["السهم"], y=df_profit["الربح"],
-                marker_color=["#00ff88" if x > 0 else "#ff4444" for x in df_profit["الربح"]],
-                text=df_profit["الربح"].apply(lambda x: f"{x:+.1f}%"),
-                textposition="outside"
-            )])
-            fig.update_layout(template="plotly_dark", height=400, title="توزيع الأرباح - آخر 10 صفقات")
-            st.plotly_chart(fig, use_container_width=True)
     
-    # ====================== التبويب 2: مفكرة الصفقات (مع فلاتر وتعديل) ======================
+    # ====================== التبويب 2: مفكرة الصفقات ======================
     with tab2:
-        st.markdown("### 📒 مفكرة الصفقات المرنة")
-        st.caption("🔍 يمكنك البحث والفلترة وتعديل الأهداف بسهولة")
+        st.markdown("### 📒 مفكرة الصفقات")
         
-        # نموذج إضافة صفقة جديدة
-        with st.expander("➕ إضافة صفقة جديدة", expanded=False):
+        with st.expander("➕ إضافة صفقة جديدة"):
             col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
-                new_symbol = st.text_input("الرمز", placeholder="COMI أو AAPL").upper()
+                symbol = st.text_input("الرمز", placeholder="COMI أو AAPL").upper()
             with col2:
-                entry_price = st.number_input("سعر الدخول", min_value=0.0, step=0.5)
+                entry = st.number_input("سعر الدخول", min_value=0.0, step=0.5)
             with col3:
-                target_price = st.number_input("المستهدف 🎯", min_value=0.0, step=0.5)
+                target = st.number_input("الهدف 🎯", min_value=0.0, step=0.5)
             with col4:
-                stop_loss = st.number_input("وقف الخسارة 🛡️", min_value=0.0, step=0.5, value=entry_price * 0.95 if entry_price > 0 else 0)
+                stop = st.number_input("وقف الخسارة", min_value=0.0, step=0.5, value=entry * 0.95 if entry > 0 else 0)
             with col5:
-                quantity = st.number_input("الكمية", min_value=1, step=1)
+                qty = st.number_input("الكمية", min_value=1, step=1)
             
-            sector = st.selectbox("القطاع", ["بنوك", "عقارات", "صناعة", "تكنولوجيا", "اتصالات", "طاقة", "استهلاكي"])
+            sector = st.selectbox("القطاع", ["بنوك", "عقارات", "صناعة", "تكنولوجيا", "اتصالات", "طاقة"])
             
-            if st.button("💾 حفظ الصفقة", use_container_width=True):
-                if new_symbol and entry_price > 0 and target_price > 0:
+            col_trail1, col_trail2 = st.columns(2)
+            with col_trail1:
+                use_trailing = st.checkbox("تفعيل Trailing Stop")
+            with col_trail2:
+                trailing_pct = st.slider("نسبة التراجع (%)", 1.0, 10.0, 5.0) if use_trailing else 0.0
+            
+            if st.button("💾 حفظ", use_container_width=True):
+                if symbol and entry > 0 and target > 0:
                     trade = {
-                        "symbol": new_symbol,
-                        "entry_price": entry_price,
-                        "target_price": target_price,
-                        "stop_loss": stop_loss if stop_loss > 0 else entry_price * 0.95,
-                        "quantity": quantity,
-                        "sector": sector,
-                        "date": datetime.now().isoformat()
+                        "symbol": symbol, "entry_price": entry, "target_price": target,
+                        "stop_loss": stop if stop > 0 else entry * 0.95,
+                        "quantity": qty, "sector": sector, "date": datetime.now().isoformat(),
+                        "trailing_stop": trailing_pct if use_trailing else 0
                     }
                     save_trade(trade)
-                    st.success(f"✅ تم إضافة {new_symbol} {get_market_flag(new_symbol)}")
+                    st.success(f"✅ تم إضافة {symbol} {get_market_flag(symbol)}")
                     st.rerun()
-                else:
-                    st.error("يرجى إدخال جميع البيانات المطلوبة")
         
-        st.markdown("---")
-        
-        # ====================== نظام الفلاتر والبحث ======================
+        # عرض الصفقات
         trades = load_trades()
-        
-        if trades:
-            col_search, col_filter, col_status = st.columns([2, 1, 1])
-            with col_search:
-                search_query = st.text_input("🔍 بحث برمز السهم", placeholder="مثال: COMI")
-            with col_filter:
-                sectors = ["الكل"] + list(set([t.get("sector", "غير محدد") for t in trades]))
-                filter_sector = st.selectbox("📁 فلترة بالقطاع", sectors)
-            with col_status:
-                filter_status = st.selectbox("📊 فلترة بالحالة", ["الكل", "رابح 🟢", "خاسر 🔴", "معلق 🟡"])
+        for trade in trades:
+            profit_pct = trade.get("profit_pct", 0)
+            profit_class = "profit-positive" if profit_pct >= 0 else "profit-negative"
             
-            # تطبيق الفلاتر
-            filtered_trades = trades.copy()
-            
-            if search_query:
-                filtered_trades = [t for t in filtered_trades if search_query.upper() in t["symbol"].upper()]
-            
-            if filter_sector != "الكل":
-                filtered_trades = [t for t in filtered_trades if t.get("sector") == filter_sector]
-            
-            if filter_status == "رابح 🟢":
-                filtered_trades = [t for t in filtered_trades if t.get("profit_pct", 0) >= 0]
-            elif filter_status == "خاسر 🔴":
-                filtered_trades = [t for t in filtered_trades if t.get("profit_pct", 0) < 0]
-            elif filter_status == "معلق 🟡":
-                filtered_trades = [t for t in filtered_trades if abs(t.get("profit_pct", 0)) < 1]
-            
-            st.caption(f"📊 عرض {len(filtered_trades)} من أصل {len(trades)} صفقة")
-            st.markdown("---")
-            
-            # عرض الصفقات
-            for trade in filtered_trades:
-                current_price = trade.get("current_price", trade["entry_price"])
-                profit_pct = trade.get("profit_pct", 0)
-                profit_class = "profit-positive" if profit_pct >= 0 else "profit-negative"
-                
-                # حساب نسبة المخاطرة/العائد
-                stop = trade.get("stop_loss", trade["entry_price"] * 0.95)
-                risk_reward = calculate_risk_reward(trade["entry_price"], trade["target_price"], stop)
-                risk_level, risk_text = get_risk_level(risk_reward)
-                
-                # حساب المسافة للهدف
-                dist_to_target = trade["target_price"] - current_price
-                progress = min(100, max(0, ((current_price - trade["entry_price"]) / (trade["target_price"] - trade["entry_price"])) * 100)) if trade["target_price"] != trade["entry_price"] else 0
-                
-                st.markdown(f"""
-                <div class="trade-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-weight: bold; font-size: 16px;">{trade['symbol']} {get_market_flag(trade['symbol'])}</span>
-                            <span style="font-size: 10px; color: #888; margin-right: 10px;">{trade.get('sector', 'غير محدد')}</span>
-                        </div>
-                        <div class="{profit_class}">{profit_pct:+.1f}%</div>
-                    </div>
-                    <div style="font-size: 12px; margin: 8px 0;">
-                        💰 الدخول: {trade['entry_price']:.2f} | 🎯 الهدف: {trade['target_price']:.2f} | 🛡️ وقف: {stop:.2f}<br>
-                        📊 الحالي: {current_price:.2f}
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar-fill" style="width: {progress}%;"></div>
-                    </div>
-                    <div style="display: flex; gap: 10px; margin-top: 8px;">
-                        <span class="risk-{risk_level}">⚖️ المخاطرة: {risk_text}</span>
-                        <span class="risk-low">🎯 متبقي: {dist_to_target:+.2f}</span>
-                        <span class="risk-medium">📊 العائد/المخاطرة: 1:{risk_reward:.1f}</span>
-                    </div>
+            st.markdown(f"""
+            <div class="trade-card">
+                <div style="display: flex; justify-content: space-between;">
+                    <div><b>{trade['symbol']}</b> {get_market_flag(trade['symbol'])} | {trade.get('sector', '')}</div>
+                    <div class="{profit_class}">{profit_pct:+.1f}%</div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                # أزرار التحكم
-                col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
-                with col1:
-                    with st.expander(f"✏️ تعديل {trade['symbol']}"):
-                        new_target = st.number_input("الهدف الجديد", value=float(trade["target_price"]), step=0.5, key=f"target_{trade['id']}")
-                        new_stop = st.number_input("وقف الخسارة الجديد", value=float(stop), step=0.5, key=f"stop_{trade['id']}")
-                        if st.button("💾 حفظ التعديل", key=f"save_{trade['id']}"):
-                            update_trade(trade['id'], new_target, new_stop)
-                            st.success("تم تحديث الصفقة")
-                            st.rerun()
-                with col2:
-                    if st.button(f"📢 تنبيه", key=f"alert_{trade['id']}"):
-                        st.toast(f"✅ تم إرسال تنبيه لـ {trade['symbol']}")
-                with col3:
-                    if st.button(f"🗑️ حذف", key=f"del_{trade['id']}"):
-                        delete_trade(trade['id'])
-                        st.rerun()
-                with col4:
-                    if profit_pct >= 5:
-                        st.success("🎯 قريب من الهدف - رفع وقف الخسارة!")
-                    elif profit_pct <= -3:
-                        st.warning("⚠️ قريب من وقف الخسارة - راجع الصفقة!")
-        else:
-            st.info("📭 لا توجد صفقات. أضف صفقتك الأولى باستخدام النموذج أعلاه")
+                <div style="font-size: 12px;">
+                    الدخول: {trade['entry_price']:.2f} | الهدف: {trade['target_price']:.2f} | وقف: {trade['stop_loss']:.2f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button(f"🗑️ حذف", key=f"del_{trade['id']}"):
+                    delete_trade(trade['id'])
+                    st.rerun()
+            with col2:
+                if trade.get("trailing_stop", 0) > 0:
+                    st.caption(f"📈 Trailing Stop: {trade['trailing_stop']}%")
     
-    # ====================== التبويب 3: إدارة المخاطر ======================
+    # ====================== التبويب 3: العقل المدبر ======================
     with tab3:
-        st.markdown("### 🎯 إدارة المخاطر المرنة")
-        st.caption("تحليل نسبة المخاطرة/العائد لكل صفقة")
+        st.markdown("### 🧠 توصيات العقل المدبر لإدارة المخاطر")
         
         trades = load_trades()
         
         if trades:
             risk_data = []
             for trade in trades:
-                stop = trade.get("stop_loss", trade["entry_price"] * 0.95)
-                risk_reward = calculate_risk_reward(trade["entry_price"], trade["target_price"], stop)
-                risk_level, _ = get_risk_level(risk_reward)
-                
-                risk_data.append({
-                    "السهم": trade["symbol"],
-                    "سعر الدخول": trade["entry_price"],
-                    "الهدف": trade["target_price"],
-                    "وقف الخسارة": stop,
-                    "نسبة المخاطرة/العائد": f"1:{risk_reward:.1f}",
-                    "مستوى المخاطرة": "🟢 منخفضة" if risk_level == "low" else "🟡 متوسطة" if risk_level == "medium" else "🔴 عالية"
-                })
+                risk_reward = calculate_risk_reward(trade["entry_price"], trade["target_price"], trade["stop_loss"])
+                risk_level, risk_text = get_risk_level(risk_reward)
+                risk_data.append({"السهم": trade["symbol"], "نسبة المخاطرة": f"1:{risk_reward:.1f}", "المستوى": risk_text})
             
-            df_risk = pd.DataFrame(risk_data)
-            st.dataframe(df_risk, use_container_width=True, hide_index=True)
+            # تحليل المخاطر
+            high_risk_trades = [t for t in risk_data if "عالية" in t["المستوى"]]
             
-            # نصائح ذكية
-            st.markdown("---")
-            st.markdown("### 🧠 توصيات العقل المدبر")
-            
-            high_risk_trades = [t for t in trades if calculate_risk_reward(t["entry_price"], t["target_price"], t.get("stop_loss", t["entry_price"] * 0.95)) < 1.5]
             if high_risk_trades:
-                st.warning(f"⚠️ {len(high_risk_trades)} صفقات ذات مخاطرة عالية. نوصي بمراجعة أهدافها.")
+                st.warning(f"⚠️ لديك {len(high_risk_trades)} صفقات ذات مخاطرة عالية (عائد أقل من 1.5 ضعف المخاطرة).")
+                st.info("💡 **نصيحة العقل المدبر:** حاول دائماً الدخول في صفقات يكون فيها العائد المستهدف ضعف وقف الخسارة على الأقل (Risk/Reward 1:2).")
             else:
-                st.success("✅ جميع صفقاتك ضمن مستويات المخاطرة المقبولة")
+                st.success("✅ جميع صفقاتك الحالية تلتزم بمعايير إدارة المخاطر الجيدة. استمر بهذا الانضباط!")
+            
+            st.markdown("---")
+            
+            # حاسبة حجم المركز
+            st.markdown("### 🧮 حاسبة حجم المركز المرنة")
+            
+            col_cap, col_risk = st.columns(2)
+            with col_cap:
+                total_capital = st.number_input("إجمالي رأس المال", value=100000, step=10000)
+            with col_risk:
+                risk_percent = st.slider("نسبة المخاطرة في الصفقة (%)", 0.5, 5.0, 2.0, 0.5)
+            
+            amount_to_risk = total_capital * (risk_percent / 100)
+            st.info(f"💰 بناءً على إعداداتك، يجب ألا تخسر أكثر من **{amount_to_risk:,.2f}** في الصفقة الواحدة.")
+            
+            # نصائح إضافية
+            st.markdown("---")
+            st.markdown("### 📊 تحليل أداء المحفظة")
+            
+            stats = calculate_portfolio_stats(trades)
+            
+            if stats['win_rate'] > 70:
+                st.success(f"🎯 نسبة نجاح ممتازة ({stats['win_rate']:.0f}%)! استمر في استراتيجيتك.")
+            elif stats['win_rate'] < 40:
+                st.warning(f"⚠️ نسبة النجاح ({stats['win_rate']:.0f}%) تحتاج تحسين. راجع استراتيجية الدخول.")
+            
+            if stats['profit_pct'] > 10:
+                st.success(f"📈 أداء استثنائي! أرباحك {stats['profit_pct']:.1f}% تفوق السوق.")
+            elif stats['profit_pct'] < 0:
+                st.warning(f"📉 محفظتك تمر بفترة تصحيح ({stats['profit_pct']:.1f}%). ركز على وقف الخسائر.")
         else:
-            st.info("📭 لا توجد صفقات لعرضها")
+            st.info("📭 أضف صفقات لبدء تحليل العقل المدبر")
     
     # ====================== التبويب 4: التقارير ======================
     with tab4:
@@ -545,10 +505,6 @@ def main():
         
         trades = load_trades()
         stats = calculate_portfolio_stats(trades)
-        
-        col1, col2 = st.columns(2)
-        col1.metric("📊 إجمالي الصفقات", len(trades))
-        col2.metric("🎯 متوسط العائد", f"{stats['profit_pct']:+.1f}%")
         
         if trades:
             # توزيع القطاعات
@@ -564,19 +520,28 @@ def main():
                     hole=0.4,
                     marker_colors=["#00ffcc", "#ff00ff", "#ffaa00", "#00ff88", "#ff4444"]
                 )])
-                fig.update_layout(template="plotly_dark", height=400, title="توزيع الاستثمارات حسب القطاع")
+                fig.update_layout(template="plotly_dark", height=400, title="توزيع الاستثمارات")
                 st.plotly_chart(fig, use_container_width=True)
+            
+            # جدول الأداء
+            df = pd.DataFrame([{
+                "السهم": t["symbol"],
+                "الربح %": f"{t.get('profit_pct', 0):+.1f}%",
+                "الحالة": "🟢 نشط"
+            } for t in trades])
+            st.dataframe(df, use_container_width=True, hide_index=True)
             
             # زر تصدير
             if st.button("📥 تصدير التقرير", use_container_width=True):
-                df = pd.DataFrame(trades)
-                csv = df.to_csv(index=False)
-                st.download_button("تحميل CSV", csv, "boursagi_report.csv", "text/csv")
+                df.to_csv("boursagi_report.csv", index=False)
+                st.success("تم تصدير التقرير")
+        else:
+            st.info("📭 لا توجد بيانات")
     
     # تذييل
     st.markdown(f"""
     <div class="footer">
-        🔄 البورصجي AI | النسخة المرنة - دعم جميع الأسواق<br>
+        🧠 البورصجي AI | العقل المدبر - إدارة مخاطر احترافية<br>
         📊 تحديث لحظي • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     </div>
     """, unsafe_allow_html=True)
