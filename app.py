@@ -1,12 +1,12 @@
 # ============================================================
-# app.py - الواجهة الرئيسية
-# تم التصحيح: استخدام import core بدلاً من from core import *
+# app.py - الواجهة الرئيسية (نسخة متوافقة مع Docker)
 # ============================================================
 
 import streamlit as st
-import core  # استيراد بسيط ونظيف
+import core
 from strings import UI_TEXT
 from datetime import datetime
+import os
 
 # ============================================================
 # إعدادات الصفحة
@@ -34,13 +34,6 @@ st.markdown("""
     border-radius: 15px;
     padding: 15px;
 }
-.golden-signal {
-    background: linear-gradient(135deg, #064e3b, #065f46);
-    border: 2px solid #10b981;
-    border-radius: 20px;
-    padding: 20px;
-    text-align: center;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,8 +59,9 @@ with st.sidebar:
     
     st.markdown("### 📊 معلومات")
     st.caption(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
-    st.caption(f"🔄 {UI_TEXT['sidebar_refresh']}")
-    st.caption(f"📈 {UI_TEXT['sidebar_stocks_count']}: {len(core.STOCKS)}")
+    st.caption(f"🔄 تحديث تلقائي كل 5 دقائق")
+    st.caption(f"📈 إجمالي الأسهم: {len(core.STOCKS)}")
+    st.caption("🐳 Docker: جاهز للتشغيل")
     
     if st.button(UI_TEXT["sidebar_update_btn"], use_container_width=True):
         st.cache_data.clear()
@@ -118,25 +112,16 @@ if df is not None and not df.empty:
     st.markdown("---")
     
     # التوصية
-    if score >= 4:
-        st.markdown(f"""
-        <div class="golden-signal">
-            <h1 style="color: #10b981; margin: 0;">✨ إشارة ذهبية ✨</h1>
-            <h2 style="color: #10b981;">{recommendation}</h2>
-            <p>🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
-                    border: 2px solid {rec_color};
-                    border-radius: 20px; padding: 20px;
-                    text-align: center;">
-            <h2 style="color: {rec_color};">{recommendation}</h2>
-            <p>🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}</p>
-            <p style="font-size: 12px;">{risk_advice}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e293b, #0f172a);
+                border: 2px solid {rec_color};
+                border-radius: 20px; padding: 20px;
+                text-align: center;">
+        <h2 style="color: {rec_color};">{recommendation}</h2>
+        <p>🎯 هدف: {target_price:.2f} | 🛑 وقف: {stop_price:.2f}</p>
+        <p style="font-size: 12px;">{risk_advice}</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # التبويبات
     tab1, tab2, tab3 = st.tabs(["📈 الرسم البياني", "📋 التحليل", "🔍 الماسح"])
@@ -157,16 +142,20 @@ if df is not None and not df.empty:
         
         st.markdown("---")
         st.markdown("**نقاط التداول**")
-        st.markdown(f"- نقطة الدخول: {current_price:.2f}")
-        st.markdown(f"- الهدف الأول: {target_price:.2f}")
-        st.markdown(f"- الهدف الثاني: {current_price * 1.08:.2f}")
-        st.markdown(f"- وقف الخسارة: {stop_price:.2f}")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(f"- نقطة الدخول: {current_price:.2f}")
+            st.markdown(f"- الهدف الأول: {target_price:.2f}")
+        with col_b:
+            st.markdown(f"- الهدف الثاني: {current_price * 1.08:.2f}")
+            st.markdown(f"- وقف الخسارة: {stop_price:.2f}")
     
     with tab3:
-        if st.button("تشغيل الماسح", use_container_width=True):
-            with st.spinner("جاري المسح..."):
+        if st.button("🚀 تشغيل الماسح", use_container_width=True):
+            with st.spinner("جاري مسح جميع الأسهم..."):
                 results = core.scan_market_parallel()
                 if not results.empty:
+                    st.success(f"تم فحص {len(results)} سهمًا بنجاح")
                     st.dataframe(results, use_container_width=True, hide_index=True)
                 else:
                     st.warning("لا توجد بيانات")
@@ -175,11 +164,14 @@ else:
     st.error(UI_TEXT["error_fetch"])
     st.info(UI_TEXT["error_solutions"])
 
+# ============================================================
 # تذييل
+# ============================================================
+
 st.markdown("---")
 st.markdown(f"""
 <div style="text-align: center; color: #64748b; font-size: 12px;">
     🚀 {UI_TEXT['footer']}<br>
-    🔄 تحديث تلقائي كل 5 دقائق
+    🔄 تحديث تلقائي كل 5 دقائق | 🐳 Docker Ready
 </div>
 """, unsafe_allow_html=True)
