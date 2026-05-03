@@ -143,8 +143,11 @@ with tab2:
     col1, col2 = st.columns(2)
     for i, (name, ticker) in enumerate(filtered_stocks.items()):
         with col1 if i % 2 == 0 else col2:
-            if st.button(f"📊 {name} ({ticker})", key=f"browse_{ticker}"):
-                selected_ticker = ticker
+            # for i, (name, ticker) in enumerate(market_info['stocks'].items()):
+    if st.button(f"📊 {name} ({ticker})", key=f"nav_btn_{ticker}_{i}"):
+        st.session_state.selected_ticker = ticker
+        st.rerun()
+selected_ticker = ticker
                 selected_name = name
 
 with tab3:
