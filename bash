@@ -2,8 +2,9 @@
 pip install -r requirements.txt
 
 # 2. إضافة مفتاح Gemini في .streamlit/secrets.toml
-GEMINI_API_KEY = "your_key_here"
-
+GEMINI_API_KEY = "gen-lang-client-0596119625"
+TELEGRAM_TOKEN = "8491391031:AAHgKzwYPF_NF38KV2r4ouYF6HYsVO99d0M"
+TELEGRAM_CHAT_ID = "863932530"
 # 3. تشغيل الأسطورة
 streamlit run app.py
 #!/bin/bash
