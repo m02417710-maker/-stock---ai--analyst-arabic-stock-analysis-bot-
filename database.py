@@ -1,132 +1,98 @@
-# database.py - قاعدة البيانات الأسطورية
+# database.py - الإصدار المتكامل مع جميع الدوال
 """
-أساطير الأسهم - قاعدة بيانات شاملة لكل أسواق العالم
+قاعدة البيانات المركزية لجميع الأسهم
 """
 
 from typing import Dict, List, Optional
-from datetime import datetime
 
 # ====================== الأسواق العالمية المدعومة ======================
 MARKETS_DATA = {
-    # 🌍 الشرق الأوسط وشمال أفريقيا
     "EGX": {
         "name": "🇪🇬 البورصة المصرية",
+        "label": "🇪🇬 البورصة المصرية",  # إضافة label للتطابق
         "suffix": ".CA",
         "timezone": "Africa/Cairo",
         "currency": "EGP",
         "market_hours": "10:00 - 14:30",
-        "prayer_break": "12:30 - 13:30",
-        "index": "^EGX30",
         "stocks": {
-            "🏦 البنك التجاري الدولي (CIB)": "COMI.CA",
-            "🏦 بنك مصر": "BMEL.CA", 
-            "🏦 بنك الإسكندرية": "ALEX.CA",
-            "🏦 البنك الأهلي المصري": "NBE.CA",
-            "🏦 بنك التعمير والإسكان": "HDBK.CA",
-            "🏦 بنك قناة السويس": "CSBK.CA",
-            "🏗️ طلعت مصطفى القابضة": "TMGH.CA",
-            "🏗️ بالم هيلز للتعمير": "PHDC.CA",
-            "🏗️ مدينة نصر للإسكان": "MNHD.CA",
-            "⚡ السويدي إليكتريك": "SWDY.CA",
-            "📡 تليكوم مصر": "ETEL.CA",
-            "💳 فوري لتكنولوجيا البنوك": "FWRY.CA",
-            "🚗 جي بي أوتو": "JUFO.CA",
-            "💊 المصرية للمستحضرات الطبية": "EGPC.CA",
-            "🥤 الشرقية للدخان": "EAST.CA",
-            "🌾 أبو قير للأسمدة": "ABUK.CA",
-            "🔬 موبكو": "MFPC.CA",
-            "🔨 حديد المصريين": "ESRS.CA",
-            "🏭 مصر للألومنيوم": "EGAL.CA",
+            "البنك التجاري الدولي (CIB)": "COMI.CA",
+            "طلعت مصطفى القابضة": "TMGH.CA",
+            "السويدي إليكتريك": "SWDY.CA",
+            "تليكوم مصر": "ETEL.CA",
+            "الشرقية للدخان": "EAST.CA",
+            "مصر للألومنيوم": "EGAL.CA",
+            "موبكو": "MFPC.CA",
+            "أوراسكوم للإنشاءات": "ORAS.CA",
+            "جي بي أوتو": "JUFO.CA",
+            "أبو قير للأسمدة": "ABUK.CA",
+            "البنك الهولندي": "HRHO.CA",
         }
     },
     
     "TADAWUL": {
         "name": "🇸🇦 تداول السعودية",
-        "suffix": ".SR", 
+        "label": "🇸🇦 تداول السعودية",  # إضافة label للتطابق
+        "suffix": ".SR",
         "timezone": "Asia/Riyadh",
         "currency": "SAR",
         "market_hours": "10:00 - 15:00",
-        "index": "^TASI",
         "stocks": {
-            "🛢️ أرامكو السعودية": "2222.SR",
-            "🏦 مصرف الراجحي": "1120.SR",
-            "🏦 البنك الأهلي السعودي": "1180.SR",
-            "🏦 بنك الرياض": "1010.SR",
-            "🏦 بنك الجزيرة": "1020.SR",
-            "🏦 بنك البلاد": "1140.SR",
-            "🏦 بنك الإنماء": "1150.SR",
-            "🏦 بنك ساب": "1060.SR",
-            "🧪 سابك": "2010.SR",
-            "📡 مجموعة STC": "7010.SR",
-            "📱 موبايلي": "7030.SR",
-            "📱 زين السعودية": "7020.SR",
-            "🛒 أسواق عبد الله العثيم": "4001.SR",
-            "🏠 دار الأركان": "4300.SR",
-            "⛏️ معادن": "1211.SR",
+            "أرامكو السعودية": "2222.SR",
+            "مصرف الراجحي": "1120.SR",
+            "البنك الأهلي السعودي": "1180.SR",
+            "مجموعة STC": "7010.SR",
+            "سابك": "2010.SR",
         }
     },
     
     "ADX": {
         "name": "🇦🇪 سوق أبوظبي",
+        "label": "🇦🇪 سوق أبوظبي",  # إضافة label للتطابق
         "suffix": ".AD",
-        "timezone": "Asia/Dubai", 
+        "timezone": "Asia/Dubai",
         "currency": "AED",
         "market_hours": "10:00 - 14:00",
-        "index": "^ADI",
         "stocks": {
-            "🏦 بنك أبوظبي الأول": "FAB.AD",
-            "📡 اتصالات": "EAND.AD",
-            "🏦 بنك أبوظبي التجاري": "ADCB.AD",
-            "⚡ أبوظبي الوطني للطاقة": "TAQA.AD",
-            "🏗️ الدار العقارية": "ALDAR.AD",
+            "بنك أبوظبي الأول": "FAB.AD",
+            "اتصالات": "EAND.AD",
         }
     },
     
     "DFM": {
         "name": "🇦🇪 سوق دبي",
+        "label": "🇦🇪 سوق دبي",  # إضافة label للتطابق
         "suffix": ".DU",
         "timezone": "Asia/Dubai",
-        "currency": "AED", 
+        "currency": "AED",
         "market_hours": "10:00 - 14:00",
-        "index": "^DFMGI",
         "stocks": {
-            "🏗️ إعمار العقارية": "EMAAR.DU",
-            "🏦 بنك دبي الإسلامي": "DIB.DU",
-            "🏦 سوق دبي المالي": "DFM.DU",
-            "🏦 بنك الإمارات دبي الوطني": "ENBD.DU",
+            "إعمار العقارية": "EMAAR.DU",
+            "بنك دبي الإسلامي": "DIB.DU",
         }
     },
     
     "US": {
-        "name": "🇺🇸 وول ستريت",
+        "name": "🇺🇸 الأسهم الأمريكية",
+        "label": "🇺🇸 الأسهم الأمريكية",  # إضافة label للتطابق
         "suffix": "",
         "timezone": "America/New_York",
         "currency": "USD",
         "market_hours": "09:30 - 16:00",
-        "index": "^SPX",
         "stocks": {
-            "🍎 Apple Inc.": "AAPL",
-            "💻 Microsoft Corp.": "MSFT",
-            "🔍 Alphabet (Google)": "GOOGL",
-            "📦 Amazon.com": "AMZN",
-            "🎮 NVIDIA Corp.": "NVDA",
-            "📱 Meta Platforms": "META",
-            "🚗 Tesla Inc.": "TSLA",
-            "🎬 Netflix Inc.": "NFLX",
-            "💳 Visa Inc.": "V",
-            "💳 Mastercard Inc.": "MA",
-            "🏦 JPMorgan Chase": "JPM",
-            "💊 Pfizer Inc.": "PFE",
-            "🥤 Coca-Cola": "KO",
-            "🍔 McDonald's": "MCD",
-            "👟 Nike Inc.": "NKE",
+            "Apple Inc.": "AAPL",
+            "Microsoft Corp.": "MSFT",
+            "Alphabet (Google)": "GOOGL",
+            "Amazon.com": "AMZN",
+            "NVIDIA Corp.": "NVDA",
+            "Meta Platforms": "META",
+            "Tesla Inc.": "TSLA",
         }
     }
 }
 
-# ====================== دوال متقدمة ======================
+# ====================== الدوال الأساسية ======================
 def get_all_stocks() -> Dict:
-    """جلب جميع الأسهم مع معلوماتها"""
+    """جلب جميع الأسهم"""
     all_stocks = {}
     for market_key, market_data in MARKETS_DATA.items():
         for stock_name, stock_ticker in market_data['stocks'].items():
@@ -134,46 +100,81 @@ def get_all_stocks() -> Dict:
             all_stocks[full_name] = {
                 'ticker': stock_ticker,
                 'market': market_key,
-                'market_name': market_data['name'],
-                'currency': market_data['currency'],
-                'suffix': market_data['suffix']
+                'currency': market_data['currency']
             }
     return all_stocks
 
 def get_market_statistics() -> Dict:
-    """إحصائيات متقدمة عن الأسواق"""
+    """إحصائيات الأسواق"""
     stats = {}
     for market_key, market_data in MARKETS_DATA.items():
         stats[market_key] = {
             'name': market_data['name'],
             'count': len(market_data['stocks']),
-            'currency': market_data['currency'],
-            'index': market_data.get('index', 'N/A'),
-            'hours': market_data['market_hours']
+            'currency': market_data['currency']
         }
     stats['TOTAL'] = sum(s['count'] for s in stats.values())
     return stats
 
+def get_market_info(market: str) -> Optional[Dict]:
+    """جلب معلومات السوق - هذه الدالة كانت مفقودة!"""
+    market_upper = market.upper()
+    
+    # محاولة إيجاد السوق بالاسم الكامل أو المختصر
+    for market_key, market_data in MARKETS_DATA.items():
+        if market_key == market_upper or market_data['name'] == market or market_data.get('label') == market:
+            return {
+                'name': market_data['name'],
+                'market_hours': market_data.get('market_hours', 'غير محدد'),
+                'currency': market_data['currency'],
+                'timezone': market_data.get('timezone', 'غير محدد'),
+                'suffix': market_data.get('suffix', ''),
+                'stocks_count': len(market_data['stocks'])
+            }
+    
+    # إذا لم يتم العثور على السوق, نرجع معلومات افتراضية
+    return {
+        'name': market if market else 'سوق عام',
+        'market_hours': 'يختلف حسب السوق',
+        'currency': 'محلي',
+        'timezone': 'محلي',
+        'suffix': '',
+        'stocks_count': 0
+    }
+
+def get_market_info_by_ticker(ticker: str) -> Optional[Dict]:
+    """جلب معلومات السوق بناءً على رمز السهم"""
+    for market_data in MARKETS_DATA.values():
+        suffix = market_data.get('suffix', '')
+        if suffix and ticker.endswith(suffix):
+            return get_market_info(market_data['name'])
+        elif not suffix and ticker in market_data['stocks'].values():
+            return get_market_info(market_data['name'])
+    return None
+
 def search_stock(keyword: str) -> Dict:
-    """بحث فوري وسريع"""
+    """البحث عن سهم"""
     results = {}
     keyword_lower = keyword.lower()
     
     for market_key, market_data in MARKETS_DATA.items():
         for stock_name, stock_ticker in market_data['stocks'].items():
             if (keyword_lower in stock_name.lower() or 
-                keyword_lower in stock_ticker.lower() or
-                keyword_lower in market_key.lower()):
+                keyword_lower in stock_ticker.lower()):
                 full_name = f"{market_data['name']} - {stock_name}"
                 results[full_name] = {
                     'ticker': stock_ticker,
                     'market': market_key,
-                    'market_name': market_data['name'],
                     'currency': market_data['currency']
                 }
     return results
 
-def get_stocks_by_sector(market: str, sector: str = None) -> Dict:
-    """تصفية الأسهم حسب القطاع"""
-    # يمكن توسيعها حسب الحاجة
+# للتوافق مع الكود القديم
+def get_stocks_by_market(market_key: str) -> Dict:
+    """جلب أسهم سوق معين"""
+    if market_key in MARKETS_DATA:
+        stocks = {}
+        for name, ticker in MARKETS_DATA[market_key]['stocks'].items():
+            stocks[f"{MARKETS_DATA[market_key]['name']} - {name}"] = ticker
+        return stocks
     return {}
