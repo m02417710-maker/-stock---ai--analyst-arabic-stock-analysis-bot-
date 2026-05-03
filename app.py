@@ -1,4 +1,4 @@
-# app.py - النسخة النهائية الكاملة (جميع الأزرار تعمل)
+# app.py - النسخة النهائية الكاملة (جميع الأزرار تعمل بدون أخطاء)
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 import google.generativeai as genai
 import pandas_ta as ta
 from datetime import datetime
+import random
 
 from database import (
     get_all_egyptian_stocks, 
@@ -34,7 +35,7 @@ from search_utils import (
 
 # إعداد الصفحة
 st.set_page_config(
-    page_title="تحليل البورصة المصرية - جميع الأسهم",
+    page_title="تحليل البورصة المصرية - المنصة المتكاملة",
     page_icon="🇪🇬",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -49,31 +50,65 @@ if 'refresh_market_news' not in st.session_state:
     st.session_state.refresh_market_news = True
 if 'search_stock_news' not in st.session_state:
     st.session_state.search_stock_news = None
+if 'button_counter' not in st.session_state:
+    st.session_state.button_counter = 0
 
-# ====================== CSS للتنسيق ======================
+def get_unique_button_id():
+    """توليد معرف فريد لكل زر"""
+    st.session_state.button_counter += 1
+    return f"btn_{st.session_state.button_counter}_{random.randint(10000, 99999)}"
+
+# ====================== CSS للتنسيق الاحترافي ======================
 st.markdown("""
 <style>
+    /* تنسيق عام */
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    /* تنسيق الأزرار */
     div.stButton > button {
         width: 100%;
-        border-radius: 10px;
-        padding: 12px;
+        border-radius: 12px;
+        padding: 14px;
         font-size: 14px;
         font-weight: bold;
-        margin: 4px 0;
+        margin: 5px 0;
         text-align: left;
         background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
         border: 1px solid #444;
         color: white;
+        transition: all 0.3s ease;
     }
     div.stButton > button:hover {
         background: linear-gradient(135deg, #2a2a3e, #3a3a4e);
         transform: translateY(-2px);
         border-color: #ff4b4b;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     }
-    .stMetric {
+    /* تنسيق البطاقات */
+    .metric-card {
         background: rgba(255,255,255,0.05);
-        border-radius: 10px;
-        padding: 10px;
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    /* تنسيق التبويبات */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 16px;
+        background: rgba(255,255,255,0.05);
+    }
+    /* تنسيق العناوين */
+    h1, h2, h3 {
+        direction: rtl;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -186,10 +221,42 @@ def display_technical_analysis():
         rsi = hist['RSI'].iloc[-1] if not pd.isna(hist['RSI'].iloc[-1]) else 50
         
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💰 السعر الحالي", f"{curr_price:.2f} ج.م", f"{change_pct:+.2f}%")
-        col2.metric("📊 مؤشر RSI", f"{rsi:.1f}")
-        col3.metric("📈 SMA 20", f"{hist['SMA_20'].iloc[-1]:.2f}")
-        col4.metric("📦 حجم التداول", f"{hist['Volume'].iloc[-1]:,.0f}")
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>💰 السعر الحالي</h3>
+                <p style="font-size: 24px; color: #ff4b4b;">{curr_price:.2f} ج.م</p>
+                <p style="color: {'green' if change_pct >= 0 else 'red'};">{change_pct:+.2f}%</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            rsi_color = '#ff4b4b' if rsi > 70 else '#51cf66' if rsi < 30 else '#ffd43b'
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>📊 مؤشر RSI</h3>
+                <p style="font-size: 24px; color: {rsi_color};">{rsi:.1f}</p>
+                <p>{'ذروة شراء' if rsi > 70 else 'ذروة بيع' if rsi < 30 else 'متوازن'}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>📈 SMA 20</h3>
+                <p style="font-size: 24px;">{hist['SMA_20'].iloc[-1]:.2f} ج.م</p>
+                <p>المتوسط المتحرك</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>📦 حجم التداول</h3>
+                <p style="font-size: 20px;">{hist['Volume'].iloc[-1]:,.0f}</p>
+                <p>سهم</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         show_rsi_alert(rsi)
         
@@ -202,7 +269,8 @@ def display_technical_analysis():
                     st.write(f"**القطاع:** {info.get('sector', 'غير متوفر')}")
                     st.write(f"**العملة:** {info.get('currency', 'EGP')}")
                 with col2:
-                    st.write(f"**القيمة السوقية:** {info.get('marketCap', 'غير متوفر'):,}" if info.get('marketCap') else "**القيمة السوقية:** غير متوفر")
+                    if info.get('marketCap'):
+                        st.write(f"**القيمة السوقية:** {info.get('marketCap', 0)/1e9:.2f} مليار ج.م")
                     st.write(f"**أعلى 52 أسبوع:** {info.get('fiftyTwoWeekHigh', 'غير متوفر')}")
                     st.write(f"**أدنى 52 أسبوع:** {info.get('fiftyTwoWeekLow', 'غير متوفر')}")
         
@@ -252,9 +320,9 @@ def display_technical_analysis():
         st.error("❌ تعذر جلب بيانات السهم")
         return True
 
-# ====================== عرض زر السهم ======================
-def display_stock_card(name: str, ticker: str, signal_data: tuple):
-    """عرض زر سهم يعمل 100%"""
+# ====================== عرض زر السهم (النسخة النهائية) ======================
+def display_stock_card(name: str, ticker: str, signal_data: tuple, unique_id: int = 0):
+    """عرض زر سهم يعمل 100% مع مفتاح فريد"""
     
     signal, rsi, change_pct, price = signal_data
     
@@ -269,12 +337,16 @@ def display_stock_card(name: str, ticker: str, signal_data: tuple):
         signal_text = "مراقبة"
     
     change_symbol = "▲" if change_pct >= 0 else "▼"
+    change_color = "#00ff00" if change_pct >= 0 else "#ff4444"
     
     # نص الزر مع كل المعلومات
     button_text = f"{emoji} {name[:40]} | 💰{price:.2f} | {change_symbol}{abs(change_pct):.1f}% | 📊RSI:{rsi:.0f} | {signal_text}"
     
-    # زر واحد فقط - هذا سيعمل 100%
-    if st.button(button_text, key=f"stock_{ticker}", use_container_width=True):
+    # مفتاح فريد 100% باستخدام ticker والرقم الفريد
+    unique_key = f"stock_btn_{ticker}_{unique_id}"
+    
+    # زر واحد فقط
+    if st.button(button_text, key=unique_key, use_container_width=True):
         select_stock(ticker, name)
 
 # ====================== تبويب تحليل السهم ======================
@@ -312,18 +384,18 @@ def stock_analysis_tab():
             
             if sell_stocks:
                 st.markdown("### 🔴 أسهم يوصى ببيعها (ذروة شراء)")
-                for name, ticker, sig_data in sell_stocks:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(sell_stocks):
+                    display_stock_card(name, ticker, sig_data, idx)
             
             if buy_stocks:
                 st.markdown("### 🟢 أسهم يوصى بشرائها (ذروة بيع)")
-                for name, ticker, sig_data in buy_stocks:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(buy_stocks):
+                    display_stock_card(name, ticker, sig_data, idx + 100)
             
             if neutral_stocks:
                 st.markdown("### 🟡 أسهم للمراقبة (منطقة حيادية)")
-                for name, ticker, sig_data in neutral_stocks:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(neutral_stocks):
+                    display_stock_card(name, ticker, sig_data, idx + 200)
     
     st.divider()
     
@@ -360,20 +432,20 @@ def stock_analysis_tab():
     if sell_list:
         st.markdown("## 🔴 أسهم يوصى ببيعها")
         st.markdown("> *السهم في منطقة ذروة شراء - احتمال تصحيح*")
-        for name, ticker, sig_data in sell_list:
-            display_stock_card(name, ticker, sig_data)
+        for idx, (name, ticker, sig_data) in enumerate(sell_list):
+            display_stock_card(name, ticker, sig_data, idx + 500)
     
     if buy_list:
         st.markdown("## 🟢 أسهم يوصى بشرائها")
         st.markdown("> *السهم في منطقة ذروة بيع - فرصة شراء*")
-        for name, ticker, sig_data in buy_list:
-            display_stock_card(name, ticker, sig_data)
+        for idx, (name, ticker, sig_data) in enumerate(buy_list):
+            display_stock_card(name, ticker, sig_data, idx + 600)
     
     if neutral_list:
         st.markdown("## 🟡 أسهم للمراقبة")
         st.markdown("> *السهم في منطقة حيادية - يحتاج لمتابعة*")
-        for name, ticker, sig_data in neutral_list:
-            display_stock_card(name, ticker, sig_data)
+        for idx, (name, ticker, sig_data) in enumerate(neutral_list):
+            display_stock_card(name, ticker, sig_data, idx + 700)
 
 # ====================== تبويب القطاعات ======================
 def sectors_tab():
@@ -383,7 +455,7 @@ def sectors_tab():
     
     sectors = get_all_sectors()
     
-    for sector in sectors:
+    for sector_idx, sector in enumerate(sectors):
         sector_stocks = get_stocks_by_sector(sector)
         
         with st.expander(f"📂 {sector} ({len(sector_stocks)} سهم)", expanded=False):
@@ -404,18 +476,18 @@ def sectors_tab():
             
             if sell_sector:
                 st.markdown("#### 🔴 يوصى ببيعها")
-                for name, ticker, sig_data in sell_sector:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(sell_sector):
+                    display_stock_card(name, ticker, sig_data, sector_idx * 1000 + idx)
             
             if buy_sector:
                 st.markdown("#### 🟢 يوصى بشرائها")
-                for name, ticker, sig_data in buy_sector:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(buy_sector):
+                    display_stock_card(name, ticker, sig_data, sector_idx * 1000 + idx + 100)
             
             if neutral_sector:
                 st.markdown("#### 🟡 للمراقبة")
-                for name, ticker, sig_data in neutral_sector:
-                    display_stock_card(name, ticker, sig_data)
+                for idx, (name, ticker, sig_data) in enumerate(neutral_sector):
+                    display_stock_card(name, ticker, sig_data, sector_idx * 1000 + idx + 200)
 
 # ====================== تبويب الأخبار ======================
 def news_tab():
@@ -423,23 +495,66 @@ def news_tab():
     
     st.markdown("## 📰 أخبار البورصة المصرية")
     
-    with st.spinner("جاري جلب الأخبار..."):
-        market_news = search_market_news()
-        
-        if market_news:
-            for idx, news in enumerate(market_news[:10]):
-                with st.container():
-                    st.markdown(f"""
-                    <div style="border-bottom: 1px solid #333; padding: 15px 0;">
-                        <h4>{idx+1}. {news['title']}</h4>
-                        <p style="color: #aaa;">{news['snippet'][:200]}...</p>
-                        <small>📰 {news['display_link']}</small>
-                        <br/>
-                        <a href="{news['link']}" target="_blank">🔗 اقرأ المزيد</a>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.warning("لا توجد أخبار حالياً")
+    # أنواع البحث
+    search_type = st.radio(
+        "اختر نوع البحث:",
+        ["📈 أخبار الأسهم", "🌍 أخبار السوق العام", "🏆 السلع والبورصات العالمية", "🔍 بحث مخصص"],
+        horizontal=True
+    )
+    
+    st.divider()
+    
+    if search_type == "📈 أخبار الأسهم":
+        stock_for_news = st.selectbox("اختر السهم", list(EGYPTIAN_STOCKS.keys()), key="news_stock")
+        if st.button("🔍 بحث", key="search_news_btn"):
+            ticker = EGYPTIAN_STOCKS.get(stock_for_news)
+            with st.spinner("جاري البحث..."):
+                news = search_stock_news(stock_for_news, ticker)
+                if news:
+                    for idx, item in enumerate(news):
+                        with st.expander(f"📰 {item['title']}"):
+                            st.write(item['snippet'])
+                            st.markdown(f"[اقرأ المزيد]({item['link']})")
+                else:
+                    st.warning("لا توجد أخبار")
+    
+    elif search_type == "🌍 أخبار السوق العام":
+        if st.button("🔄 تحديث الأخبار", key="refresh_news"):
+            with st.spinner("جاري جلب الأخبار..."):
+                news = search_market_news()
+                if news:
+                    for idx, item in enumerate(news):
+                        with st.expander(f"📰 {item['title']}"):
+                            st.write(item['snippet'])
+                            st.markdown(f"[اقرأ المزيد]({item['link']})")
+                else:
+                    st.warning("لا توجد أخبار")
+    
+    elif search_type == "🏆 السلع والبورصات العالمية":
+        commodity = st.selectbox("اختر السلعة", ["الذهب", "النفط", "الفضة", "الدولار", "اليورو"])
+        if st.button("🔍 بحث", key="search_commodity_btn"):
+            with st.spinner("جاري البحث..."):
+                news = search_commodity_news(commodity)
+                if news:
+                    for idx, item in enumerate(news):
+                        with st.expander(f"🏆 {item['title']}"):
+                            st.write(item['snippet'])
+                            st.markdown(f"[اقرأ المزيد]({item['link']})")
+                else:
+                    st.warning("لا توجد أخبار")
+    
+    else:
+        custom_query = st.text_input("اكتب ما تريد البحث عنه", key="custom_query")
+        if custom_query and st.button("🔍 بحث", key="custom_search_btn"):
+            with st.spinner("جاري البحث..."):
+                results = smart_search(custom_query)
+                if results:
+                    for idx, item in enumerate(results):
+                        with st.expander(f"📰 {item['title']}"):
+                            st.write(item['snippet'])
+                            st.markdown(f"[اقرأ المزيد]({item['link']})")
+                else:
+                    st.warning("لا توجد نتائج")
 
 # ====================== عرض الشريط العلوي ======================
 def show_stats_bar():
@@ -457,16 +572,23 @@ def show_stats_bar():
 def main():
     """التطبيق الرئيسي"""
     
-    st.title("🇪🇬 بوت تحليل البورصة المصرية - المتطور")
-    st.markdown("**تحليل ذكي | إشارات شراء/بيع | تحديث فوري**")
-    st.markdown("---")
+    # رأس الصفحة
+    st.markdown("""
+    <div class="main-header">
+        <h1>🇪🇬 منصة تحليل البورصة المصرية - النسخة المتكاملة</h1>
+        <p>تحليل فني متقدم | إشارات ذكية | أخبار فورية | ذكاء اصطناعي</p>
+    </div>
+    """, unsafe_allow_html=True)
     
+    # شريط الإحصائيات
     show_stats_bar()
     st.markdown("---")
     
+    # عرض التحليل الفني إذا تم اختيار سهم
     if st.session_state.selected_ticker is not None:
         display_technical_analysis()
     else:
+        # تبويبات التصفح
         tab1, tab2, tab3 = st.tabs(["📈 تحليل الأسهم", "🏢 القطاعات", "📰 الأخبار"])
         
         with tab1:
@@ -478,8 +600,13 @@ def main():
         with tab3:
             news_tab()
     
+    # تذييل الصفحة
     st.markdown("---")
-    st.caption("🇪🇬 **البورصة المصرية (EGX)** | الإشارات مبنية على مؤشر RSI | للأغراض التعليمية")
+    st.caption("""
+    <div style="text-align: center;">
+        🇪🇬 **البورصة المصرية (EGX)** | البيانات من Yahoo Finance | الإشارات مبنية على مؤشر RSI | للأغراض التعليمية
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
