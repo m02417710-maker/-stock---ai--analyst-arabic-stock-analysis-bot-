@@ -1,7 +1,7 @@
-# database.py - قاعدة البيانات المركزية لجميع الأسهم
+# database.py - المركز اللوجستي للبيانات (The Core Hub)
 """
-هذا الملف يحتوي على جميع بيانات الأسهم والأسواق
-يمكنك إضافة آلاف الأسهم هنا دون التأثير على سرعة التطبيق
+هذا الملف هو المحرك الذي يغذي التطبيق ببيانات جميع الأسهم والأسواق.
+تم تنظيمه ليسهل جلب البيانات التاريخية والتحليل اللحظي.
 """
 
 # ====================== تعريف الأسواق والأسهم ======================
@@ -13,48 +13,34 @@ MARKETS_DATA = {
         "timezone": "Africa/Cairo",
         "currency": "EGP",
         "market_hours": "10:00 - 14:30",
-        "prayer_break": "12:30 - 13:30",
         "stocks": {
-            # البنوك
-            "البنك التجاري الدولي (CIB)": "COMI.CA",
-            "بنك مصر": "BMEL.CA",
-            "البنك الأهلي المصري": "ALEX.CA",
-            "بنك الإسكندرية": "ALEX.CA",
-            "بنك التعمير والإسكان": "HDBK.CA",
-            "بنك قناة السويس": "CSBK.CA",
+            # البنوك والتمويل
+            "التجاري الدولي (CIB)": "COMI",
+            "بنك مصر": "BMEL",
+            "بنك التعمير والإسكان": "HDBK",
+            "بنك قناة السويس": "CSBK",
+            "فوري للتمويل": "FWRY",
+            "بلتون المالية": "BTFH",
+            "هيرميس القابضة": "HRHO",
             
             # العقارات والإنشاءات
-            "طلعت مصطفى القابضة": "TMGH.CA",
-            "بالم هيلز للتعمير": "PHDC.CA",
-            "السادس من أكتوبر للتنمية": "OCDI.CA",
-            "مدينة نصر للإسكان": "MNHD.CA",
+            "طلعت مصطفى": "TMGH",
+            "بالم هيلز": "PHDC",
+            "مدينة مصر (الإسكان سابقاً)": "MNHD",
+            "أوراسكوم للتنمية": "ORHD",
+            "أوراسكوم للإنشاء": "ORAS",
             
-            # المواد الغذائية والزراعة
-            "الشرقية للدخان (إيسترن)": "EAST.CA",
-            "أبو قير للأسمدة": "ABUK.CA",
-            "مصر لإنتاج الأسمدة (موبكو)": "MFPC.CA",
-            "سكر الحدود": "SUGR.CA",
+            # الصناعة والطاقة
+            "أبو قير للأسمدة": "ABUK",
+            "السويدي إليكتريك": "SWDY",
+            "سيدبك": "SKPC",
+            "موبكو للأسمدة": "MFPC",
+            "مصر للألومنيوم": "EGAL",
+            "إيسترن كومباني": "EAST",
             
-            # الاتصالات وتكنولوجيا المعلومات
-            "تليكوم مصر": "ETEL.CA",
-            "فوري لتكنولوجيا البنوك": "FWRY.CA",
-            "Raya Holding": "RAYA.CA",
-            
-            # الصناعة
-            "السويدي إليكتريك": "SWDY.CA",
-            "مصر للألومنيوم": "EGAL.CA",
-            "سيدبك": "SKPC.CA",
-            
-            # السياحة والخدمات
-            "أوراسكوم للإنشاءات": "ORAS.CA",
-            "أوراسكوم للفنادق": "ORHD.CA",
-            
-            # السيارات والنقل
-            "جي بي أوتو": "JUFO.CA",
-            
-            # الخدمات المالية
-            "البنك الهولندي": "HRHO.CA",
-            "بلتون المالية": "BTFH.CA",
+            # الاتصالات والتكنولوجيا
+            "المصرية للاتصالات": "ETEL",
+            "راية القابضة": "RAYA",
         }
     },
     
@@ -66,67 +52,20 @@ MARKETS_DATA = {
         "currency": "SAR",
         "market_hours": "10:00 - 15:00",
         "stocks": {
-            # الطاقة
-            "أرامكو السعودية": "2222.SR",
-            
-            # البنوك
-            "مصرف الراجحي": "1120.SR",
-            "البنك الأهلي السعودي": "1180.SR",
-            "بنك الرياض": "1010.SR",
-            "بنك الجزيرة": "1020.SR",
-            "الإنماء": "1150.SR",
-            "بنك ساب": "1060.SR",
-            
-            # البتروكيماويات
-            "سابك": "2010.SR",
-            "التصنيع الوطنية": "2060.SR",
-            
-            # الاتصالات
-            "مجموعة STC": "7010.SR",
-            "موبايلي": "7030.SR",
-            "زين السعودية": "7020.SR",
-            
-            # التجزئة
-            "أسواق عبد الله العثيم": "4001.SR",
-            
-            # العقار
-            "دار الأركان": "4300.SR",
-            
-            # المعادن
-            "معادن": "1211.SR",
+            "أرامكو السعودية": "2222",
+            "مصرف الراجحي": "1120",
+            "البنك الأهلي السعودي": "1180",
+            "سابك": "2010",
+            "مجموعة إس تي سي": "7010",
+            "معادن": "1211",
+            "دار الأركان": "4300",
+            "مصرف الإنماء": "1150",
+            "زين السعودية": "7020",
+            "موبايلي": "7030",
         }
     },
-    
-    # ========== سوق أبوظبي (ADX) ==========
-    "ADX": {
-        "label": "🇦🇪 سوق أبوظبي",
-        "suffix": ".AD",
-        "timezone": "Asia/Dubai",
-        "currency": "AED",
-        "market_hours": "10:00 - 14:00",
-        "stocks": {
-            "بنك أبوظبي الأول": "FAB.AD",
-            "اتصالات": "EAND.AD",
-            "أبوظبي التجاري": "ADCB.AD",
-            "أبوظبي الوطني للطاقة": "TAQA.AD",
-        }
-    },
-    
-    # ========== سوق دبي (DFM) ==========
-    "DFM": {
-        "label": "🇦🇪 سوق دبي",
-        "suffix": ".DU",
-        "timezone": "Asia/Dubai",
-        "currency": "AED",
-        "market_hours": "10:00 - 14:00",
-        "stocks": {
-            "إعمار العقارية": "EMAAR.DU",
-            "بنك دبي الإسلامي": "DIB.DU",
-            "سوق دبي المالي": "DFM.DU",
-        }
-    },
-    
-    # ========== الأسهم الأمريكية ==========
+
+    # ========== الأسهم الأمريكية (US Stocks) ==========
     "US": {
         "label": "🇺🇸 الأسهم الأمريكية",
         "suffix": "",
@@ -134,54 +73,86 @@ MARKETS_DATA = {
         "currency": "USD",
         "market_hours": "09:30 - 16:00",
         "stocks": {
-            "Apple Inc.": "AAPL",
-            "Microsoft Corp.": "MSFT",
-            "Alphabet (Google)": "GOOGL",
-            "Amazon.com": "AMZN",
-            "NVIDIA Corp.": "NVDA",
-            "Meta Platforms": "META",
-            "Tesla Inc.": "TSLA",
-            "Netflix Inc.": "NFLX",
+            "Apple (أبل)": "AAPL",
+            "Microsoft (مايكروسوفت)": "MSFT",
+            "NVIDIA (إنفيديا)": "NVDA",
+            "Alphabet (جوجل)": "GOOGL",
+            "Amazon (أمازون)": "AMZN",
+            "Meta (فيسبوك)": "META",
+            "Tesla (تسلا)": "TSLA",
+            "Netflix (نتفليكس)": "NFLX",
         }
     }
 }
 
-# ====================== دوال مساعدة ======================
-def get_all_stocks() -> dict:
-    """جلب جميع الأسهم من جميع الأسواق"""
-    all_stocks = {}
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            full_name = f"{market_data['label']} - {stock_name}"
-            all_stocks[full_name] = {
-                'ticker': stock_ticker,
-                'market': market_key,
-                'currency': market_data['currency']
-            }
-    return all_stocks
+# ====================== دوال المعالجة الذكية ======================
 
-def get_market_statistics() -> dict:
-    """إحصائيات عن عدد الأسهم"""
-    stats = {}
-    for market_key, market_data in MARKETS_DATA.items():
-        stats[market_key] = {
-            'name': market_data['label'],
-            'count': len(market_data['stocks']),
-            'currency': market_data['currency']
-        }
-    stats['TOTAL'] = sum(s['count'] for s in stats.values())
+def get_ticker_full(symbol: str, market_key: str) -> str:
+    """تحويل الرمز المختصر إلى رمز كامل لـ yfinance"""
+    suffix = MARKETS_DATA.get(market_key, {}).get('suffix', '')
+    if suffix and not symbol.endswith(suffix):
+        return f"{symbol}{suffix}"
+    return symbol
+
+def get_all_stocks_flat() -> dict:
+    """تحويل الهيكل المعقد إلى قائمة بسيطة للاستخدام في القوائم المنسدلة"""
+    flat_list = {}
+    for m_key, m_data in MARKETS_DATA.items():
+        for name, symbol in m_data['stocks'].items():
+            full_display = f"{m_data['label']} | {name} ({symbol})"
+            flat_list[full_display] = {
+                "symbol": symbol,
+                "market": m_key,
+                "ticker": get_ticker_full(symbol, m_key),
+                "currency": m_data['currency']
+            }
+    return flat_list
+
+def search_stock(query: str):
+    """البحث السريع عن سهم"""
+    all_stocks = get_all_stocks_flat()
+    results = {k: v for k, v in all_stocks.items() if query.lower() in k.lower()}
+    return results
+
+def get_market_stats():
+    """إحصائيات سريعة للواجهة"""
+    stats = {m: len(data['stocks']) for m, data in MARKETS_DATA.items()}
+    stats['TOTAL'] = sum(stats.values())
     return stats
 
-def search_stock(keyword: str) -> dict:
-    """البحث عن سهم"""
-    results = {}
-    keyword_lower = keyword.lower()
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            if keyword_lower in stock_name.lower() or keyword_lower in stock_ticker.lower():
-                full_name = f"{market_data['label']} - {stock_name}"
-                results[full_name] = {
-                    'ticker': stock_ticker,
-                    'market': market_key
-                }
-    return results
+# ====================== تهيئة قاعدة البيانات المحلية ======================
+import sqlite3
+import pandas as pd
+from pathlib import Path
+
+# تحديد مسار قاعدة البيانات ليعمل على Streamlit و GitHub
+DB_PATH = Path(__file__).parent / "data" / "boursagi.db"
+DB_PATH.parent.mkdir(exist_ok=True)
+
+def init_local_db():
+    """إنشاء الجداول اللازمة للمفكرة والتحليلات"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # جدول الصفقات
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            market TEXT,
+            entry_price REAL,
+            target_price REAL,
+            stop_loss REAL,
+            quantity INTEGER,
+            date TEXT,
+            status TEXT DEFAULT 'active'
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# تنفيذ التهيئة عند استدعاء الملف
+init_local_db()
+
+if __name__ == "__main__":
+    print(f"✅ تم تحميل قاعدة البيانات بنجاح.")
+    print(f"📊 إجمالي الأسهم المدعومة: {get_market_stats()['TOTAL']}")
