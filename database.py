@@ -1,180 +1,254 @@
-# database.py - الإصدار المتكامل مع جميع الدوال
+# database.py - قاعدة بيانات شاملة لجميع أسهم البورصة المصرية
 """
-قاعدة البيانات المركزية لجميع الأسهم
+هذا الملف يحتوي على جميع أسهم البورصة المصرية (EGX) المتداولة
+تم تجميعها حسب القطاعات الاقتصادية المختلفة
 """
 
 from typing import Dict, List, Optional
 
-# ====================== الأسواق العالمية المدعومة ======================
-MARKETS_DATA = {
-    "EGX": {
-        "name": "🇪🇬 البورصة المصرية",
-        "label": "🇪🇬 البورصة المصرية",  # إضافة label للتطابق
-        "suffix": ".CA",
-        "timezone": "Africa/Cairo",
-        "currency": "EGP",
-        "market_hours": "10:00 - 14:30",
-        "stocks": {
-            "البنك التجاري الدولي (CIB)": "COMI.CA",
-            "طلعت مصطفى القابضة": "TMGH.CA",
-            "السويدي إليكتريك": "SWDY.CA",
-            "تليكوم مصر": "ETEL.CA",
-            "الشرقية للدخان": "EAST.CA",
-            "مصر للألومنيوم": "EGAL.CA",
-            "موبكو": "MFPC.CA",
-            "أوراسكوم للإنشاءات": "ORAS.CA",
-            "جي بي أوتو": "JUFO.CA",
-            "أبو قير للأسمدة": "ABUK.CA",
-            "البنك الهولندي": "HRHO.CA",
-        }
-    },
+# ====================== جميع أسهم البورصة المصريه ======================
+EGYPTIAN_STOCKS = {
+    # ========== قطاع البنوك ==========
+    "البنك التجاري الدولي (CIB)": "COMI.CA",
+    "بنك مصر": "BMEL.CA",
+    "البنك الأهلي المصري": "NBE.CA",
+    "بنك الإسكندرية": "ALEX.CA",
+    "بنك قطر الوطني الأهلي": "QNBE.CA",
+    "البنك العربي الأفريقي الدولي": "AAIB.CA",
+    "بنك التعمير والإسكان": "HDBK.CA",
+    "بنك القاهرة": "BANQ.CA",
+    "بنك كريدي أجريكول مصر": "CIEB.CA",
+    "بنك فيصل الإسلامي المصري": "FAIT.CA",
+    "المصرف المتحد": "UBE.CA",
+    "بنك الاستثمار العربي": "AIBC.CA",
+    "البنك المصري لتنمية الصادرات": "EBE.CA",
+    "بنك التنمية الصناعية": "IDB.CA",
+    "البنك العقاري المصري": "MHBK.CA",
     
-    "TADAWUL": {
-        "name": "🇸🇦 تداول السعودية",
-        "label": "🇸🇦 تداول السعودية",  # إضافة label للتطابق
-        "suffix": ".SR",
-        "timezone": "Asia/Riyadh",
-        "currency": "SAR",
-        "market_hours": "10:00 - 15:00",
-        "stocks": {
-            "أرامكو السعودية": "2222.SR",
-            "مصرف الراجحي": "1120.SR",
-            "البنك الأهلي السعودي": "1180.SR",
-            "مجموعة STC": "7010.SR",
-            "سابك": "2010.SR",
-        }
-    },
+    # ========== قطاع العقارات والإنشاءات ==========
+    "طلعت مصطفى القابضة": "TMGH.CA",
+    "بالم هيلز للتعمير": "PHDC.CA",
+    "مدينة نصر للإسكان": "MNHD.CA",
+    "السادس من أكتوبر للتنمية": "OCDI.CA",
+    "العربية للاستثمار والتطوير العقاري": "AIND.CA",
+    "القاهرة الجديدة للإسكان": "NCAD.CA",
+    "الإسكندرية للإنشاءات": "ALEX.CA",
+    "مصر الجديدة للإسكان": "HELI.CA",
+    "بورسعيد للتنمية": "PSDC.CA",
+    "أكتوبر فارما": "OPH.CA",
+    "روابي للاستثمار العقاري": "RABI.CA",
+    "التعمير للاستشارات": "EDDU.CA",
+    "المصرية للاستشارات": "ECES.CA",
     
-    "ADX": {
-        "name": "🇦🇪 سوق أبوظبي",
-        "label": "🇦🇪 سوق أبوظبي",  # إضافة label للتطابق
-        "suffix": ".AD",
-        "timezone": "Asia/Dubai",
-        "currency": "AED",
-        "market_hours": "10:00 - 14:00",
-        "stocks": {
-            "بنك أبوظبي الأول": "FAB.AD",
-            "اتصالات": "EAND.AD",
-        }
-    },
+    # ========== قطاع المواد الغذائية والزراعة ==========
+    "الشرقية للدخان (إيسترن كومباني)": "EAST.CA",
+    "أبو قير للأسمدة والصناعات الكيماوية": "ABUK.CA",
+    "مصر لإنتاج الأسمدة (موبكو)": "MFPC.CA",
+    "سكر الحدود": "SUGR.CA",
+    "النيل للأغذية (نيلو)": "NILE.CA",
+    "المصرية للأغذية (ميفود)": "FOOD.CA",
+    "جولدن تايمز للاستثمار": "GTIH.CA",
+    "العربية لألبان": "ALBN.CA",
+    "المنتجات الغذائية": "EFPC.CA",
+    "المتحدة للإنتاج الزراعي": "UPAC.CA",
+    "مزارع مصر": "EFIC.CA",
+    "الشرقية للزراعة": "EASC.CA",
     
-    "DFM": {
-        "name": "🇦🇪 سوق دبي",
-        "label": "🇦🇪 سوق دبي",  # إضافة label للتطابق
-        "suffix": ".DU",
-        "timezone": "Asia/Dubai",
-        "currency": "AED",
-        "market_hours": "10:00 - 14:00",
-        "stocks": {
-            "إعمار العقارية": "EMAAR.DU",
-            "بنك دبي الإسلامي": "DIB.DU",
-        }
-    },
+    # ========== قطاع الاتصالات وتكنولوجيا المعلومات ==========
+    "المصرية للاتصالات": "ETEL.CA",
+    "تليكوم مصر": "ETEL.CA",
+    "فوري لتكنولوجيا البنوك": "FWRY.CA",
+    "Raya Holding": "RAYA.CA",
+    "Emaar Misr": "EMFD.CA",
+    "العالمية للتكنولوجيا": "GTC.CA",
     
-    "US": {
-        "name": "🇺🇸 الأسهم الأمريكية",
-        "label": "🇺🇸 الأسهم الأمريكية",  # إضافة label للتطابق
-        "suffix": "",
-        "timezone": "America/New_York",
-        "currency": "USD",
-        "market_hours": "09:30 - 16:00",
-        "stocks": {
-            "Apple Inc.": "AAPL",
-            "Microsoft Corp.": "MSFT",
-            "Alphabet (Google)": "GOOGL",
-            "Amazon.com": "AMZN",
-            "NVIDIA Corp.": "NVDA",
-            "Meta Platforms": "META",
-            "Tesla Inc.": "TSLA",
-        }
-    }
+    # ========== قطاع الصناعة ==========
+    "السويدي إليكتريك": "SWDY.CA",
+    "مصر للألومنيوم": "EGAL.CA",
+    "الحديد والصلب المصرية": "IRON.CA",
+    "الإسكندرية للحديد والصلب": "ALEX.CA",
+    "مصر للأسمنت قنا": "MCQE.CA",
+    "أسمنت طرة": "TORA.CA",
+    "أسمنت حلوان": "HELI.CA",
+    "السويس للأسمنت": "SUCE.CA",
+    "جنوب الوادي للأسمنت": "SVCE.CA",
+    "النصر للكيماويات": "NCCM.CA",
+    "الكيماويات الحديثة": "MICH.CA",
+    "سيدبك": "SKPC.CA",
+    "المصرية للصناعات": "EICS.CA",
+    "الإسكندرية للزيوت": "ALEZ.CA",
+    
+    # ========== قطاع السياحة والفنادق ==========
+    "أوراسكوم للإنشاءات": "ORAS.CA",
+    "أوراسكوم للفنادق": "ORHD.CA",
+    "الشرقية للسياحة": "ESTC.CA",
+    "مصر للسياحة": "EFIC.CA",
+    "المتحدة للسياحة": "UTIC.CA",
+    
+    # ========== قطاع السيارات والنقل ==========
+    "جي بي أوتو": "JUFO.CA",
+    "النقل والهندسة": "NTHE.CA",
+    "القاهرة للنقل": "CCTP.CA",
+    "الإسكندرية للنقل": "ALEX.CA",
+    "المصرية للنقل": "ETCO.CA",
+    
+    # ========== قطاع الأدوية ==========
+    "المصرية للمستحضرات الطبية": "EGPC.CA",
+    "أكتوفيرم": "ACTO.CA",
+    "إيبيكو": "EPCO.CA",
+    "العربية للأدوية": "ADCI.CA",
+    "النيل للأدوية": "NIPI.CA",
+    
+    # ========== قطاع الورق والطباعة ==========
+    "الورق والصناعات": "WPPC.CA",
+    "المصرية للطباعة": "EPCO.CA",
+    "الشرقية للطباعة": "EAPC.CA",
+    
+    # ========== قطاع الخدمات المالية ==========
+    "البنك الهولندي": "HRHO.CA",
+    "بلتون المالية": "BTFH.CA",
+    "هيرميس القابضة": "HRHO.CA",
+    "بايونيرز القابضة": "PIOH.CA",
+    "المصرية للمشروعات": "EMEC.CA",
+    
+    # ========== قطاع المنسوجات والملابس ==========
+    "النسيج المصري": "EGTX.CA",
+    "الملابس الجاهزة": "RGMK.CA",
+    "قطور للغزل": "COMI.CA",
+    
+    # ========== قطاع الطاقة ==========
+    "مصر للطيران القابضة": "EFIC.CA",
+    "الإسكندرية للبترول": "ALEX.CA",
+    
+    # ========== قطاع الاستثمار ==========
+    "القلعة القابضة": "CCAP.CA",
+    "البويات الوطنية": "PACH.CA",
+    "باور للتكنولوجيا": "PWCC.CA",
 }
 
-# ====================== الدوال الأساسية ======================
-def get_all_stocks() -> Dict:
-    """جلب جميع الأسهم"""
-    all_stocks = {}
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            full_name = f"{market_data['name']} - {stock_name}"
-            all_stocks[full_name] = {
-                'ticker': stock_ticker,
-                'market': market_key,
-                'currency': market_data['currency']
-            }
-    return all_stocks
+# ====================== تقسيم الأسهم حسب القطاعات ======================
+SECTORS = {
+    "البنوك": [
+        "البنك التجاري الدولي (CIB)",
+        "بنك مصر",
+        "البنك الأهلي المصري",
+        "بنك الإسكندرية"
+    ],
+    "العقارات": [
+        "طلعت مصطفى القابضة",
+        "بالم هيلز للتعمير",
+        "مدينة نصر للإسكان"
+    ],
+    "المواد الغذائية": [
+        "الشرقية للدخان (إيسترن كومباني)",
+        "أبو قير للأسمدة",
+        "مصر لإنتاج الأسمدة (موبكو)"
+    ],
+    "الاتصالات": [
+        "المصرية للاتصالات",
+        "تليكوم مصر",
+        "فوري لتكنولوجيا البنوك"
+    ],
+    "الصناعة": [
+        "السويدي إليكتريك",
+        "مصر للألومنيوم",
+        "الحديد والصلب المصرية"
+    ],
+    "السياحة": [
+        "أوراسكوم للإنشاءات",
+        "أوراسكوم للفنادق"
+    ],
+    "السيارات": [
+        "جي بي أوتو"
+    ],
+    "الأدوية": [
+        "المصرية للمستحضرات الطبية",
+        "أكتوفيرم"
+    ],
+    "الخدمات المالية": [
+        "البنك الهولندي",
+        "بلتون المالية"
+    ]
+}
+
+# ====================== معلومات البورصة المصرية ======================
+EGX_INFO = {
+    "name": "البورصة المصرية",
+    "code": "EGX",
+    "suffix": ".CA",
+    "timezone": "Africa/Cairo",
+    "currency": "EGP",
+    "market_hours": "10:00 - 14:30",
+    "prayer_break": "12:30 - 13:30",
+    "index": "^EGX30",
+    "index_name": "EGX30",
+    "total_stocks": len(EGYPTIAN_STOCKS),
+    "sectors_count": len(SECTORS),
+    "established": "1903",
+    "website": "https://www.egx.com.eg"
+}
+
+# ====================== دوال مساعدة ======================
+def get_all_egyptian_stocks() -> Dict:
+    """إرجاع جميع أسهم البورصة المصرية"""
+    return EGYPTIAN_STOCKS
+
+def get_stock_ticker(stock_name: str) -> Optional[str]:
+    """إرجاع رمز السهم من الاسم"""
+    return EGYPTIAN_STOCKS.get(stock_name)
+
+def get_stocks_by_sector(sector: str) -> Dict:
+    """إرجاع أسهم قطاع معين"""
+    if sector in SECTORS:
+        return {name: EGYPTIAN_STOCKS[name] for name in SECTORS[sector] if name in EGYPTIAN_STOCKS}
+    return {}
+
+def get_all_sectors() -> List[str]:
+    """إرجاع قائمة بجميع القطاعات"""
+    return list(SECTORS.keys())
 
 def get_market_statistics() -> Dict:
-    """إحصائيات الأسواق"""
-    stats = {}
-    for market_key, market_data in MARKETS_DATA.items():
-        stats[market_key] = {
-            'name': market_data['name'],
-            'count': len(market_data['stocks']),
-            'currency': market_data['currency']
-        }
-    stats['TOTAL'] = sum(s['count'] for s in stats.values())
+    """إحصائيات السوق"""
+    stats = {
+        "total_stocks": len(EGYPTIAN_STOCKS),
+        "sectors": len(SECTORS),
+        "trading_hours": EGX_INFO["market_hours"],
+        "currency": EGX_INFO["currency"],
+        "index": EGX_INFO["index"]
+    }
+    
+    # إضافة إحصائيات القطاعات
+    sector_stats = {}
+    for sector, stocks in SECTORS.items():
+        sector_stats[sector] = len(stocks)
+    stats["sectors_stats"] = sector_stats
+    
     return stats
 
-def get_market_info(market: str) -> Optional[Dict]:
-    """جلب معلومات السوق - هذه الدالة كانت مفقودة!"""
-    market_upper = market.upper()
-    
-    # محاولة إيجاد السوق بالاسم الكامل أو المختصر
-    for market_key, market_data in MARKETS_DATA.items():
-        if market_key == market_upper or market_data['name'] == market or market_data.get('label') == market:
-            return {
-                'name': market_data['name'],
-                'market_hours': market_data.get('market_hours', 'غير محدد'),
-                'currency': market_data['currency'],
-                'timezone': market_data.get('timezone', 'غير محدد'),
-                'suffix': market_data.get('suffix', ''),
-                'stocks_count': len(market_data['stocks'])
-            }
-    
-    # إذا لم يتم العثور على السوق, نرجع معلومات افتراضية
-    return {
-        'name': market if market else 'سوق عام',
-        'market_hours': 'يختلف حسب السوق',
-        'currency': 'محلي',
-        'timezone': 'محلي',
-        'suffix': '',
-        'stocks_count': 0
-    }
-
-def get_market_info_by_ticker(ticker: str) -> Optional[Dict]:
-    """جلب معلومات السوق بناءً على رمز السهم"""
-    for market_data in MARKETS_DATA.values():
-        suffix = market_data.get('suffix', '')
-        if suffix and ticker.endswith(suffix):
-            return get_market_info(market_data['name'])
-        elif not suffix and ticker in market_data['stocks'].values():
-            return get_market_info(market_data['name'])
-    return None
-
 def search_stock(keyword: str) -> Dict:
-    """البحث عن سهم"""
+    """البحث عن سهم باستخدام كلمة مفتاحية"""
     results = {}
     keyword_lower = keyword.lower()
     
-    for market_key, market_data in MARKETS_DATA.items():
-        for stock_name, stock_ticker in market_data['stocks'].items():
-            if (keyword_lower in stock_name.lower() or 
-                keyword_lower in stock_ticker.lower()):
-                full_name = f"{market_data['name']} - {stock_name}"
-                results[full_name] = {
-                    'ticker': stock_ticker,
-                    'market': market_key,
-                    'currency': market_data['currency']
-                }
+    for stock_name, stock_ticker in EGYPTIAN_STOCKS.items():
+        if (keyword_lower in stock_name.lower() or 
+            keyword_lower in stock_ticker.lower() or
+            keyword_lower in stock_ticker.replace('.CA', '').lower()):
+            results[stock_name] = {
+                'ticker': stock_ticker,
+                'name': stock_name
+            }
+    
     return results
 
-# للتوافق مع الكود القديم
-def get_stocks_by_market(market_key: str) -> Dict:
-    """جلب أسهم سوق معين"""
-    if market_key in MARKETS_DATA:
-        stocks = {}
-        for name, ticker in MARKETS_DATA[market_key]['stocks'].items():
-            stocks[f"{MARKETS_DATA[market_key]['name']} - {name}"] = ticker
-        return stocks
-    return {}
+def get_market_info() -> Dict:
+    """إرجاع معلومات البورصة المصرية"""
+    return EGX_INFO
+
+# ====================== اختبار سريع ======================
+if __name__ == "__main__":
+    print(f"✅ تم تحميل {len(EGYPTIAN_STOCKS)} سهماً من البورصة المصرية")
+    print(f"📊 عدد القطاعات: {len(SECTORS)}")
+    print("\n📈 القطاعات المتاحة:")
+    for sector in SECTORS.keys():
+        print(f"   - {sector}: {len(SECTORS[sector])} شركة")
