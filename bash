@@ -1,3 +1,11 @@
+# 1. تثبيت المتطلبات
+pip install -r requirements.txt
+
+# 2. إضافة مفتاح Gemini في .streamlit/secrets.toml
+GEMINI_API_KEY = "your_key_here"
+
+# 3. تشغيل الأسطورة
+streamlit run app.py
 #!/bin/bash
 
 # =============================================================================
