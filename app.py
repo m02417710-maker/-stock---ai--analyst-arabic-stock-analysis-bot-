@@ -1,4 +1,4 @@
-# app.py - الإصدار النهائي
+# app.py - النسخة النهائية الكاملة (جميع الأزرار تعمل)
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
@@ -11,7 +11,6 @@ from plotly.subplots import make_subplots
 import google.generativeai as genai
 import pandas_ta as ta
 from datetime import datetime
-import hashlib
 
 from database import (
     get_all_egyptian_stocks, 
@@ -50,120 +49,31 @@ if 'refresh_market_news' not in st.session_state:
     st.session_state.refresh_market_news = True
 if 'search_stock_news' not in st.session_state:
     st.session_state.search_stock_news = None
-if 'button_counter' not in st.session_state:
-    st.session_state.button_counter = 0
-
-def get_unique_key():
-    """توليد مفتاح فريد لكل زر"""
-    st.session_state.button_counter += 1
-    return f"btn_{st.session_state.button_counter}_{datetime.now().timestamp()}"
 
 # ====================== CSS للتنسيق ======================
 st.markdown("""
 <style>
-    /* تنسيق البطاقات - ألوان كما هي */
-    .stock-card-buy {
-        background: linear-gradient(135deg, #1a3d1a, #0d2b0d);
-        border: 2px solid #00ff00;
-        border-radius: 15px;
-        padding: 15px;
-        margin: 10px 0;
-        transition: all 0.3s ease;
-    }
-    .stock-card-buy:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,255,0,0.2);
-    }
-    .stock-card-sell {
-        background: linear-gradient(135deg, #4a1a1a, #2d0b0b);
-        border: 2px solid #ff4444;
-        border-radius: 15px;
-        padding: 15px;
-        margin: 10px 0;
-        transition: all 0.3s ease;
-    }
-    .stock-card-sell:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(255,0,0,0.2);
-    }
-    .stock-card-neutral {
-        background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
-        border: 2px solid #ffd700;
-        border-radius: 15px;
-        padding: 15px;
-        margin: 10px 0;
-        transition: all 0.3s ease;
-    }
-    .stock-card-neutral:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(255,215,0,0.2);
-    }
-    .stock-price {
-        font-size: 24px;
-        font-weight: bold;
-        margin: 5px 0;
-    }
-    .stock-change-up {
-        color: #00ff00;
-        font-size: 16px;
-        font-weight: bold;
-    }
-    .stock-change-down {
-        color: #ff4444;
-        font-size: 16px;
-        font-weight: bold;
-    }
-    .stock-rsi {
-        font-size: 14px;
-        margin: 5px 0;
-    }
-    .signal-buy {
-        background-color: #00ff00;
-        color: #000;
-        padding: 3px 8px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        display: inline-block;
-    }
-    .signal-sell {
-        background-color: #ff4444;
-        color: #fff;
-        padding: 3px 8px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        display: inline-block;
-    }
-    .signal-neutral {
-        background-color: #ffd700;
-        color: #000;
-        padding: 3px 8px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        display: inline-block;
-    }
-    .stock-name {
-        font-size: 16px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-    .recommendation {
-        font-size: 13px;
-        margin-top: 10px;
-        padding: 5px;
-        border-radius: 8px;
-        text-align: center;
-    }
-    /* تنسيق الأزرار المستطيلة التي تملأ الشاشة */
     div.stButton > button {
         width: 100%;
-        border-radius: 0px;
+        border-radius: 10px;
         padding: 12px;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: bold;
-        margin: 2px 0;
+        margin: 4px 0;
+        text-align: left;
+        background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
+        border: 1px solid #444;
+        color: white;
+    }
+    div.stButton > button:hover {
+        background: linear-gradient(135deg, #2a2a3e, #3a3a4e);
+        transform: translateY(-2px);
+        border-color: #ff4b4b;
+    }
+    .stMetric {
+        background: rgba(255,255,255,0.05);
+        border-radius: 10px;
+        padding: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -342,53 +252,29 @@ def display_technical_analysis():
         st.error("❌ تعذر جلب بيانات السهم")
         return True
 
-# ====================== عرض البطاقة ======================
+# ====================== عرض زر السهم ======================
 def display_stock_card(name: str, ticker: str, signal_data: tuple):
-    """عرض بطاقة سهم متطورة مع زر تحليل مستطيل"""
+    """عرض زر سهم يعمل 100%"""
     
     signal, rsi, change_pct, price = signal_data
     
     if signal == "buy":
-        card_class = "stock-card-buy"
-        signal_text = "🟢 فرصة شراء"
-        signal_class = "signal-buy"
-        recommendation = "✅ يوصى بالشراء - السهم في منطقة ذروة بيع"
-        arrow = "📈"
+        emoji = "🟢"
+        signal_text = "شراء"
     elif signal == "sell":
-        card_class = "stock-card-sell"
-        signal_text = "🔴 فرصة بيع"
-        signal_class = "signal-sell"
-        recommendation = "⚠️ يوصى بالبيع - السهم في منطقة ذروة شراء"
-        arrow = "📉"
+        emoji = "🔴"
+        signal_text = "بيع"
     else:
-        card_class = "stock-card-neutral"
-        signal_text = "🟡 مراقبة"
-        signal_class = "signal-neutral"
-        recommendation = "⏸ يوصى بالانتظار - السهم في منطقة حيادية"
-        arrow = "➡️"
+        emoji = "🟡"
+        signal_text = "مراقبة"
     
-    change_class = "stock-change-up" if change_pct >= 0 else "stock-change-down"
     change_symbol = "▲" if change_pct >= 0 else "▼"
     
-    # عرض البطاقة
-    st.markdown(f"""
-    <div class="{card_class}">
-        <div class="stock-name">{arrow} {name[:40]}</div>
-        <div class="stock-price">{price:.2f} ج.م</div>
-        <div class="{change_class}">{change_symbol} {abs(change_pct):.2f}%</div>
-        <div class="stock-rsi">📊 RSI: {rsi:.1f}</div>
-        <div style="margin: 10px 0;">
-            <span class="{signal_class}">{signal_text}</span>
-        </div>
-        <div class="recommendation" style="background: rgba(255,255,255,0.1);">
-            {recommendation}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # نص الزر مع كل المعلومات
+    button_text = f"{emoji} {name[:40]} | 💰{price:.2f} | {change_symbol}{abs(change_pct):.1f}% | 📊RSI:{rsi:.0f} | {signal_text}"
     
-    # زر التحليل المستطيل الذي يملأ الشاشة
-    btn_key = get_unique_key()
-    if st.button(f"📊 تحليل {name[:25]}", key=btn_key, use_container_width=True):
+    # زر واحد فقط - هذا سيعمل 100%
+    if st.button(button_text, key=f"stock_{ticker}", use_container_width=True):
         select_stock(ticker, name)
 
 # ====================== تبويب تحليل السهم ======================
