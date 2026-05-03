@@ -1,3 +1,168 @@
+# أضف هذا الاستيراد في بداية app.py
+from search_utils import (
+    search_google, 
+    search_stock_news, 
+    search_market_news,
+    search_commodity_news,
+    smart_search,
+    analyze_news_with_gemini
+)
+
+# ====================== تبويب الأخبار والبحث الجديد ======================
+def news_and_search_tab():
+    """تبويب الأخبار والبحث المتقدم"""
+    
+    st.markdown("## 📰 أخبار وتحليلات البورصة المصرية")
+    
+    # أنواع البحث
+    search_type = st.radio(
+        "اختر نوع البحث:",
+        ["📈 أخبار الأسهم", "🌍 أخبار السوق العام", "🏆 السلع والبورصات العالمية", "🔍 بحث مخصص"],
+        horizontal=True
+    )
+    
+    st.divider()
+    
+    if search_type == "📈 أخبار الأسهم":
+        st.subheader("ابحث عن أخبار سهم معين")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            stock_for_news = st.selectbox(
+                "اختر السهم",
+                list(EGYPTIAN_STOCKS.keys()),
+                key="news_stock_select"
+            )
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("🔍 بحث عن الأخبار", key="search_stock_news_btn"):
+                st.session_state.search_stock_news = stock_for_news
+        
+        if st.session_state.get('search_stock_news'):
+            stock_ticker = EGYPTIAN_STOCKS.get(st.session_state.search_stock_news)
+            
+            with st.spinner(f"جاري البحث عن أخبار {st.session_state.search_stock_news}..."):
+                news_results = search_stock_news(st.session_state.search_stock_news, stock_ticker)
+                
+                if news_results:
+                    st.success(f"✅ تم العثور على {len(news_results)} خبر")
+                    
+                    for idx, news in enumerate(news_results, 1):
+                        with st.expander(f"📰 {idx}. {news['title'][:100]}", expanded=False):
+                            st.markdown(f"**المصدر:** {news['display_link']}")
+                            st.markdown(f"**الملخص:** {news['snippet']}")
+                            st.markdown(f"**الرابط:** [اقرأ المزيد]({news['link']})")
+                            
+                            # زر لتحليل الخبر
+                            if st.button(f"🤖 تحليل هذا الخبر", key=f"analyze_news_{idx}"):
+                                analysis = analyze_news_with_gemini(news['snippet'], st.session_state.search_stock_news)
+                                st.info(analysis)
+                else:
+                    st.warning("لم يتم العثور على أخبار لهذا السهم")
+    
+    elif search_type == "🌍 أخبار السوق العام":
+        st.subheader("آخر أخبار البورصة المصرية والاقتصاد")
+        
+        if st.button("🔄 تحديث الأخبار", key="refresh_market_news"):
+            st.session_state.refresh_market_news = True
+        
+        if st.session_state.get('refresh_market_news', True):
+            with st.spinner("جاري جلب آخر أخبار السوق..."):
+                market_news = search_market_news()
+                
+                if market_news:
+                    # عرض أخبار مهمة أولاً
+                    st.markdown("### 🔴 أهم الأخبار العاجلة")
+                    
+                    cols = st.columns(2)
+                    for idx, news in enumerate(market_news[:4]):
+                        with cols[idx % 2]:
+                            st.markdown(f"""
+                            <div style='border: 1px solid #ddd; border-radius: 10px; padding: 10px; margin: 5px;'>
+                                <small>{news['display_link']}</small>
+                                <h4>{news['title'][:80]}...</h4>
+                                <p>{news['snippet'][:150]}...</p>
+                                <a href="{news['link']}" target="_blank">📖 اقرأ المزيد</a>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    st.markdown("### 📰 باقي الأخبار")
+                    for idx, news in enumerate(market_news[4:], 5):
+                        with st.expander(f"{idx}. {news['title']}"):
+                            st.markdown(f"**المصدر:** {news['display_link']}")
+                            st.markdown(f"**الملخص:** {news['snippet']}")
+                            st.markdown(f"**الرابط:** [اقرأ المزيد]({news['link']})")
+                            
+                            if st.button(f"🤖 تحليل", key=f"analyze_market_{idx}"):
+                                analysis = analyze_news_with_gemini(news['snippet'])
+                                st.info(analysis)
+                else:
+                    st.warning("لم يتم العثور على أخبار حالياً")
+    
+    elif search_type == "🏆 السلع والبورصات العالمية":
+        st.subheader("أخبار السلع العالمية (ذهب، نفط، عملات)")
+        
+        commodities_list = ["الذهب", "النفط", "الفضة", "الدولار", "اليورو", "الغاز الطبيعي"]
+        selected_commodity = st.selectbox("اختر السلعة أو العملة", commodities_list)
+        
+        if st.button(f"🔍 بحث عن أخبار {selected_commodity}", key="search_commodity"):
+            with st.spinner(f"جاري البحث عن أخبار {selected_commodity}..."):
+                commodity_news = search_commodity_news(selected_commodity)
+                
+                if commodity_news:
+                    st.success(f"✅ تم العثور على {len(commodity_news)} خبر")
+                    
+                    for idx, news in enumerate(commodity_news, 1):
+                        with st.expander(f"🏆 {idx}. {news['title']}"):
+                            st.markdown(f"**المصدر:** {news['display_link']}")
+                            st.markdown(f"**الملخص:** {news['snippet']}")
+                            st.markdown(f"**الرابط:** [اقرأ المزيد]({news['link']})")
+                else:
+                    st.warning(f"لم يتم العثور على أخبار لـ {selected_commodity}")
+    
+    else:  # بحث مخصص
+        st.subheader("بحث مخصص في أخبار الاقتصاد")
+        
+        custom_query = st.text_input(
+            "أدخل ما تريد البحث عنه",
+            placeholder="مثال: قرارات الفائدة البنك المركزي, أسعار الذهب اليوم, أرباح شركات البورصة..."
+        )
+        
+        if custom_query and st.button("🔍 بحث", type="primary"):
+            with st.spinner("جاري البحث..."):
+                results = smart_search(custom_query, "اقتصاد")
+                
+                if results:
+                    st.success(f"✅ تم العثور على {len(results)} نتيجة")
+                    
+                    for idx, result in enumerate(results, 1):
+                        with st.expander(f"{idx}. {result['title']}"):
+                            st.markdown(f"**الرابط:** [{result['link']}]({result['link']})")
+                            st.markdown(f"**الملخص:** {result['snippet']}")
+                            
+                            if st.button(f"🤖 تحليل المحتوى", key=f"analyze_custom_{idx}"):
+                                analysis = analyze_news_with_gemini(result['snippet'])
+                                st.info(analysis)
+                else:
+                    st.warning("لا توجد نتائج. حاول بكلمات مختلفة")
+
+# ====================== تحديث الدالة الرئيسية ======================
+def main():
+    # ... الكود الحالي ...
+    
+    # تعديل التبويبات لإضافة تبويب الأخبار
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🔍 بحث عن سهم", 
+        "📋 تصفح جميع الأسهم", 
+        "🏢 حسب القطاع",
+        "📰 أخبار وتحليلات"  # التبويب الجديد
+    ])
+    
+    # ... باقي الكود كما هو ...
+    
+    with tab4:
+        news_and_search_tab()
 # app.py - تطبيق تحليل جميع أسهم البورصة المصرية (النسخة المصححة)
 import streamlit as st
 import warnings
