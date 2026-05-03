@@ -1,4 +1,4 @@
-# app.py - النسخة مع أزرار متطورة (يتم استبدال فقط في عرض الأزرار)
+# app.py - الإصدار النهائي
 import streamlit as st
 import warnings
 warnings.filterwarnings('ignore')
@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 import google.generativeai as genai
 import pandas_ta as ta
 from datetime import datetime
+import hashlib
 
 from database import (
     get_all_egyptian_stocks, 
@@ -40,10 +41,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ====================== تهيئة حالة الجلسة ======================
+if 'selected_ticker' not in st.session_state:
+    st.session_state.selected_ticker = None
+if 'selected_name' not in st.session_state:
+    st.session_state.selected_name = None
+if 'refresh_market_news' not in st.session_state:
+    st.session_state.refresh_market_news = True
+if 'search_stock_news' not in st.session_state:
+    st.session_state.search_stock_news = None
+if 'button_counter' not in st.session_state:
+    st.session_state.button_counter = 0
+
+def get_unique_key():
+    """توليد مفتاح فريد لكل زر"""
+    st.session_state.button_counter += 1
+    return f"btn_{st.session_state.button_counter}_{datetime.now().timestamp()}"
+
 # ====================== CSS للتنسيق ======================
 st.markdown("""
 <style>
-    /* تنسيق البطاقات */
+    /* تنسيق البطاقات - ألوان كما هي */
     .stock-card-buy {
         background: linear-gradient(135deg, #1a3d1a, #0d2b0d);
         border: 2px solid #00ff00;
@@ -51,7 +69,6 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
         transition: all 0.3s ease;
-        cursor: pointer;
     }
     .stock-card-buy:hover {
         transform: translateY(-5px);
@@ -64,7 +81,6 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
         transition: all 0.3s ease;
-        cursor: pointer;
     }
     .stock-card-sell:hover {
         transform: translateY(-5px);
@@ -77,7 +93,6 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
         transition: all 0.3s ease;
-        cursor: pointer;
     }
     .stock-card-neutral:hover {
         transform: translateY(-5px);
@@ -141,18 +156,17 @@ st.markdown("""
         border-radius: 8px;
         text-align: center;
     }
+    /* تنسيق الأزرار المستطيلة التي تملأ الشاشة */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 0px;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 2px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
-
-# ====================== تهيئة حالة الجلسة ======================
-if 'selected_ticker' not in st.session_state:
-    st.session_state.selected_ticker = None
-if 'selected_name' not in st.session_state:
-    st.session_state.selected_name = None
-if 'refresh_market_news' not in st.session_state:
-    st.session_state.refresh_market_news = True
-if 'search_stock_news' not in st.session_state:
-    st.session_state.search_stock_news = None
 
 # ====================== إعداد Gemini ======================
 def init_gemini():
@@ -197,7 +211,6 @@ def get_stock_signal(ticker: str):
         prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
         change_pct = ((current_price - prev_price) / prev_price) * 100 if prev_price != 0 else 0
         
-        # تحديد الإشارة
         if rsi < 30:
             return "buy", rsi, change_pct, current_price
         elif rsi > 70:
@@ -270,6 +283,19 @@ def display_technical_analysis():
         
         show_rsi_alert(rsi)
         
+        # معلومات إضافية عن الشركة
+        if info:
+            with st.expander("ℹ️ معلومات إضافية عن الشركة"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**الاسم:** {info.get('longName', 'غير متوفر')}")
+                    st.write(f"**القطاع:** {info.get('sector', 'غير متوفر')}")
+                    st.write(f"**العملة:** {info.get('currency', 'EGP')}")
+                with col2:
+                    st.write(f"**القيمة السوقية:** {info.get('marketCap', 'غير متوفر'):,}" if info.get('marketCap') else "**القيمة السوقية:** غير متوفر")
+                    st.write(f"**أعلى 52 أسبوع:** {info.get('fiftyTwoWeekHigh', 'غير متوفر')}")
+                    st.write(f"**أدنى 52 أسبوع:** {info.get('fiftyTwoWeekLow', 'غير متوفر')}")
+        
         # الرسم البياني
         st.subheader("📊 الرسم البياني الفني")
         
@@ -285,7 +311,7 @@ def display_technical_analysis():
         st.plotly_chart(fig, use_container_width=True)
         
         # التحليل بالذكاء الاصطناعي
-        analyze_clicked = st.button("🤖 تحليل ذكي بالذكاء الاصطناعي", type="primary", use_container_width=True)
+        analyze_clicked = st.button("🤖 تحليل ذكي بالذكاء الاصطناعي", type="primary", use_container_width=True, key="ai_analyze_btn")
         
         if auto_analyze or analyze_clicked:
             model = init_gemini()
@@ -316,9 +342,9 @@ def display_technical_analysis():
         st.error("❌ تعذر جلب بيانات السهم")
         return True
 
-# ====================== عرض البطاقة المتطورة للسهم ======================
-def display_stock_card(name: str, ticker: str, signal_data: tuple, idx: int):
-    """عرض بطاقة سهم متطورة مع إشارة الشراء/البيع"""
+# ====================== عرض البطاقة ======================
+def display_stock_card(name: str, ticker: str, signal_data: tuple):
+    """عرض بطاقة سهم متطورة مع زر تحليل مستطيل"""
     
     signal, rsi, change_pct, price = signal_data
     
@@ -344,8 +370,9 @@ def display_stock_card(name: str, ticker: str, signal_data: tuple, idx: int):
     change_class = "stock-change-up" if change_pct >= 0 else "stock-change-down"
     change_symbol = "▲" if change_pct >= 0 else "▼"
     
-    stock_html = f"""
-    <div class="{card_class}" onclick="alert('تم اختيار {name}')">
+    # عرض البطاقة
+    st.markdown(f"""
+    <div class="{card_class}">
         <div class="stock-name">{arrow} {name[:40]}</div>
         <div class="stock-price">{price:.2f} ج.م</div>
         <div class="{change_class}">{change_symbol} {abs(change_pct):.2f}%</div>
@@ -357,20 +384,17 @@ def display_stock_card(name: str, ticker: str, signal_data: tuple, idx: int):
             {recommendation}
         </div>
     </div>
-    """
+    """, unsafe_allow_html=True)
     
-    # استخدام Streamlit button بدلاً من HTML onclick
-    container = st.container()
-    with container:
-        st.markdown(stock_html, unsafe_allow_html=True)
-        if st.button(f"🔍 تحليل {name[:20]}", key=f"card_btn_{ticker}_{idx}", use_container_width=True):
-            select_stock(ticker, name)
+    # زر التحليل المستطيل الذي يملأ الشاشة
+    btn_key = get_unique_key()
+    if st.button(f"📊 تحليل {name[:25]}", key=btn_key, use_container_width=True):
+        select_stock(ticker, name)
 
 # ====================== تبويب تحليل السهم ======================
 def stock_analysis_tab():
-    """تبويب تحليل السهم مع أزرار متطورة"""
+    """تبويب تحليل السهم"""
     
-    # شريط البحث
     st.markdown("### 🔍 ابحث عن سهم")
     
     search_term = st.text_input(
@@ -385,7 +409,6 @@ def stock_analysis_tab():
         if results:
             st.success(f"✅ تم العثور على {len(results)} نتيجة")
             
-            # تقسيم النتائج حسب الإشارات
             buy_stocks = []
             sell_stocks = []
             neutral_stocks = []
@@ -401,32 +424,27 @@ def stock_analysis_tab():
                 else:
                     neutral_stocks.append((stock_name, stock_data['ticker'], signal_data))
             
-            # عرض أسهم البيع أولاً (لأنها مثيرة للاهتمام)
             if sell_stocks:
                 st.markdown("### 🔴 أسهم يوصى ببيعها (ذروة شراء)")
-                for idx, (name, ticker, sig_data) in enumerate(sell_stocks):
-                    display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in sell_stocks:
+                    display_stock_card(name, ticker, sig_data)
             
-            # عرض أسهم الشراء
             if buy_stocks:
                 st.markdown("### 🟢 أسهم يوصى بشرائها (ذروة بيع)")
-                for idx, (name, ticker, sig_data) in enumerate(buy_stocks):
-                    display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in buy_stocks:
+                    display_stock_card(name, ticker, sig_data)
             
-            # عرض الأسهم الحيادية
             if neutral_stocks:
                 st.markdown("### 🟡 أسهم للمراقبة (منطقة حيادية)")
-                for idx, (name, ticker, sig_data) in enumerate(neutral_stocks):
-                    display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in neutral_stocks:
+                    display_stock_card(name, ticker, sig_data)
     
     st.divider()
     
-    # تصفح الأسهم
     st.markdown("### 📋 جميع أسهم البورصة المصرية")
     
     all_stocks = get_all_egyptian_stocks()
     
-    # فلتر سريع
     filter_text = st.text_input("🔎 فلتر سريع", placeholder="اكتب جزء من اسم السهم...", key="filter_input")
     
     filtered_stocks = all_stocks
@@ -435,10 +453,8 @@ def stock_analysis_tab():
     
     st.caption(f"📊 عرض {len(filtered_stocks)} من {len(all_stocks)} سهماً")
     
-    # جلب الإشارات لجميع الأسهم المعروضة
     st.markdown("### 🏆 أسهم البورصة المصرية مرتبة حسب الإشارات")
     
-    # تجميع الأسهم حسب الإشارة
     buy_list = []
     sell_list = []
     neutral_list = []
@@ -455,35 +471,23 @@ def stock_analysis_tab():
             else:
                 neutral_list.append((name, ticker, signal_data))
     
-    # عرض أسهم البيع
     if sell_list:
         st.markdown("## 🔴 أسهم يوصى ببيعها")
         st.markdown("> *السهم في منطقة ذروة شراء - احتمال تصحيح*")
-        
-        cols = st.columns(2)
-        for idx, (name, ticker, sig_data) in enumerate(sell_list):
-            with cols[idx % 2]:
-                display_stock_card(name, ticker, sig_data, idx)
+        for name, ticker, sig_data in sell_list:
+            display_stock_card(name, ticker, sig_data)
     
-    # عرض أسهم الشراء
     if buy_list:
         st.markdown("## 🟢 أسهم يوصى بشرائها")
         st.markdown("> *السهم في منطقة ذروة بيع - فرصة شراء*")
-        
-        cols = st.columns(2)
-        for idx, (name, ticker, sig_data) in enumerate(buy_list):
-            with cols[idx % 2]:
-                display_stock_card(name, ticker, sig_data, idx)
+        for name, ticker, sig_data in buy_list:
+            display_stock_card(name, ticker, sig_data)
     
-    # عرض الأسهم الحيادية
     if neutral_list:
         st.markdown("## 🟡 أسهم للمراقبة")
         st.markdown("> *السهم في منطقة حيادية - يحتاج لمتابعة*")
-        
-        cols = st.columns(2)
-        for idx, (name, ticker, sig_data) in enumerate(neutral_list):
-            with cols[idx % 2]:
-                display_stock_card(name, ticker, sig_data, idx)
+        for name, ticker, sig_data in neutral_list:
+            display_stock_card(name, ticker, sig_data)
 
 # ====================== تبويب القطاعات ======================
 def sectors_tab():
@@ -493,11 +497,10 @@ def sectors_tab():
     
     sectors = get_all_sectors()
     
-    for sector_idx, sector in enumerate(sectors):
+    for sector in sectors:
         sector_stocks = get_stocks_by_sector(sector)
         
         with st.expander(f"📂 {sector} ({len(sector_stocks)} سهم)", expanded=False):
-            # تحليل أسهم القطاع
             buy_sector = []
             sell_sector = []
             neutral_sector = []
@@ -515,24 +518,18 @@ def sectors_tab():
             
             if sell_sector:
                 st.markdown("#### 🔴 يوصى ببيعها")
-                cols = st.columns(2)
-                for idx, (name, ticker, sig_data) in enumerate(sell_sector):
-                    with cols[idx % 2]:
-                        display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in sell_sector:
+                    display_stock_card(name, ticker, sig_data)
             
             if buy_sector:
                 st.markdown("#### 🟢 يوصى بشرائها")
-                cols = st.columns(2)
-                for idx, (name, ticker, sig_data) in enumerate(buy_sector):
-                    with cols[idx % 2]:
-                        display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in buy_sector:
+                    display_stock_card(name, ticker, sig_data)
             
             if neutral_sector:
                 st.markdown("#### 🟡 للمراقبة")
-                cols = st.columns(2)
-                for idx, (name, ticker, sig_data) in enumerate(neutral_sector):
-                    with cols[idx % 2]:
-                        display_stock_card(name, ticker, sig_data, idx)
+                for name, ticker, sig_data in neutral_sector:
+                    display_stock_card(name, ticker, sig_data)
 
 # ====================== تبويب الأخبار ======================
 def news_tab():
